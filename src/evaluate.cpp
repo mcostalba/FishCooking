@@ -526,6 +526,18 @@ Value do_evaluate(const Position& pos, Value& margin) {
 
 
   // evaluate_pieces<>() assigns bonuses and penalties to the pieces of a given color
+	static const unsigned char pawn_stuck_value[64] =
+		{
+		0, 0, 0, 0, 0, 0, 0, 0,
+		1, 1, 2, 2, 2, 2, 1, 1,
+		1, 2, 3, 3, 3, 3, 2, 1,
+		1, 2, 3, 5, 5, 3, 2, 1,
+		1, 2, 3, 5, 5, 3, 2, 1,
+		1, 2, 3, 3, 3, 3, 2, 1,
+		1, 1, 2, 2, 2, 2, 1, 1,
+		0, 0, 0, 0, 0, 0, 0, 0
+		};
+
 
   template<PieceType Piece, Color Us, bool Trace>
   Score evaluate_pieces(const Position& pos, EvalInfo& ei, Score& mobility, Bitboard mobilityArea) {
@@ -600,12 +612,25 @@ Value do_evaluate(const Position& pos, Value& margin) {
         }
 
         // Special extra evaluation for bishops
-        if (Piece == BISHOP && pos.is_chess960())
+        if (Piece == BISHOP)
         {
+						// Penalize bishops for sitting on the same squares as pawns
+						int pawnSame[2];
+						pawnSame[Us] = pawnSame[Them] = 0;
+						Bitboard b2 = pos.pieces(PAWN);
+						while (b2) {
+							Square s2 = pop_1st_bit(&b2);
+	            if (!opposite_colors(s, s2)) {
+								pawnSame[color_of(pos.piece_on(s2))] += pawn_stuck_value[s2];
+							}
+						}
+						//printf("%s, %d, %d\n", pos.to_fen().c_str(), pawnSame[Us], pawnSame[Them]);
+						score -= (pawnSame[Us] + pawnSame[Them] / 2) * make_score(2, 2);
+						
             // An important Chess960 pattern: A cornered bishop blocked by
             // a friendly pawn diagonally in front of it is a very serious
             // problem, especially when that pawn is also blocked.
-            if (s == relative_square(Us, SQ_A1) || s == relative_square(Us, SQ_H1))
+            if (pos.is_chess960() && (s == relative_square(Us, SQ_A1) || s == relative_square(Us, SQ_H1)))
             {
                 Square d = pawn_push(Us) + (file_of(s) == FILE_A ? DELTA_E : DELTA_W);
                 if (pos.piece_on(s + d) == make_piece(Us, PAWN))

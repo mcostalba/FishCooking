@@ -167,6 +167,9 @@ namespace {
   // happen in Chess960 games.
   const Score TrappedBishopA1H1Penalty = make_score(100, 100);
 
+  // Penalty for BNR that is not defended by anything
+  const Score UndefendedPiecePenalty = make_score(25, 10);
+
   // The SpaceMask[Color] contains the area of the board which is considered
   // by the space evaluation. In the middle game, each side is given a bonus
   // based on how many squares inside this area are safe and available for
@@ -354,12 +357,11 @@ namespace {
 template<bool Trace>
 Value do_evaluate(const Position& pos, Value& margin) {
 
+  assert(!pos.in_check());
+
   EvalInfo ei;
   Value margins[2];
   Score score, mobilityWhite, mobilityBlack;
-
-  assert(pos.thread() >= 0 && pos.thread() < MAX_THREADS);
-  assert(!pos.in_check());
 
   // Initialize score by reading the incrementally updated scores included
   // in the position object (material + piece square tables).
@@ -701,15 +703,26 @@ Value do_evaluate(const Position& pos, Value& margin) {
 
     const Color Them = (Us == WHITE ? BLACK : WHITE);
 
-    Bitboard b;
+    Bitboard b, undefended, undefendedMinors, weakEnemies;
     Score score = SCORE_ZERO;
 
+    // Undefended pieces get penalized even if not under attack
+    undefended = pos.pieces(Them) & ~ei.attackedBy[Them][0];
+    undefendedMinors = undefended & (pos.pieces(BISHOP) | pos.pieces(KNIGHT));
+
+    if (undefendedMinors)
+        score += single_bit(undefendedMinors) ? UndefendedPiecePenalty
+                                              : UndefendedPiecePenalty * 2;
+    if (undefended & pos.pieces(ROOK))
+        score += UndefendedPiecePenalty;
+
     // Enemy pieces not defended by a pawn and under our attack
-    Bitboard weakEnemies =  pos.pieces(Them)
-                          & ~ei.attackedBy[Them][PAWN]
-                          & ei.attackedBy[Us][0];
+    weakEnemies =  pos.pieces(Them)
+                 & ~ei.attackedBy[Them][PAWN]
+                 & ei.attackedBy[Us][0];
+
     if (!weakEnemies)
-        return SCORE_ZERO;
+        return score;
 
     // Add bonus according to type of attacked enemy piece and to the
     // type of attacking piece, from knights to queens. Kings are not

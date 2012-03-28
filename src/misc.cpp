@@ -35,11 +35,9 @@
 #  include <xmmintrin.h>
 #endif
 
-#include <algorithm>
 #include <iomanip>
 #include <iostream>
 #include <sstream>
-#include <streambuf>
 
 #include "misc.h"
 #include "thread.h"
@@ -106,94 +104,66 @@ void dbg_print() {
 }
 
 
-/// Our fancy logging facility. The trick here is to replace cout.rdbuf() with
-/// this one that sends the output both to console and to a file, this allow us
-/// to toggle the logging of std::cout to a file while preserving output to
-/// stdout and without changing a single line of code! Idea and code from:
-/// http://groups.google.com/group/comp.lang.c++/msg/1d941c0f26ea0d81
-
-class Tee: public streambuf {
-public:
-  typedef char_traits<char> traits_type;
-  typedef traits_type::int_type int_type;
-
-  Tee(ios& s, ofstream& f) : stream(s), file(f), stream_buf(s.rdbuf()) {}
-  ~Tee() { set(false); }
-
-  void set(bool b) { stream.rdbuf(b ? this : stream_buf); }
-
-private:
-  int_type overflow(int_type c) {
-
-    if (traits_type::eq_int_type(c, traits_type::eof()))
-        return traits_type::not_eof(c);
-
-    c = stream_buf->sputc(traits_type::to_char_type(c));
-
-    if (!traits_type::eq_int_type(c, traits_type::eof()))
-        c = file.rdbuf()->sputc(traits_type::to_char_type(c));
-
-    return c;
-  }
-
-  int sync() {
-
-    int c = stream_buf->pubsync();
-
-    if (c != -1)
-        c = file.rdbuf()->pubsync();
-
-    return c;
-  }
-
-  int underflow() { return traits_type::not_eof(stream_buf->sgetc()); }
-
-  int uflow() {
-
-      int c = stream_buf->sbumpc();
-
-      if (!traits_type::eq_int_type(c, traits_type::eof()))
-          file.rdbuf()->sputc(traits_type::to_char_type(c));
-
-      return traits_type::not_eof(c);
-  }
-
-  ios& stream;
-  ofstream& file;
-  streambuf* stream_buf;
-};
+/// Our fancy logging facility. The trick here is to replace cin.rdbuf() and
+/// cout.rdbuf() with two Tie objects that tie cin and cout to a file stream. We
+/// can toggle the logging of std::cout and std:cin at runtime while preserving
+/// usual i/o functionality and without changing a single line of code!
+/// Idea from http://groups.google.com/group/comp.lang.c++/msg/1d941c0f26ea0d81
 
 class Logger {
-public:
-   Logger() : in(cin, file), out(cout, file) {}
-  ~Logger() { set(false); }
 
-  void set(bool b) {
+  Logger() : in(cin.rdbuf(), file), out(cout.rdbuf(), file) {}
+  ~Logger() { start(false); }
 
-    if (b && !file.is_open())
-    {
-        file.open("io_log.txt", ifstream::out | ifstream::app);
-        in.set(true);
-        out.set(true);
+  struct Tie: public streambuf { // MSVC requires splitted streambuf for cin and cout
+
+    Tie(streambuf* b, ofstream& f) : buf(b), file(f) {}
+
+    int sync() { return file.rdbuf()->pubsync(), buf->pubsync(); }
+    int overflow(int c) { return log(buf->sputc((char)c), "<< "); }
+    int underflow() { return buf->sgetc(); }
+    int uflow() { return log(buf->sbumpc(), ">> "); }
+
+    int log(int c, const char* prefix) {
+
+      static int last = '\n';
+
+      if (last == '\n')
+          file.rdbuf()->sputn(prefix, 3);
+
+      return last = file.rdbuf()->sputc((char)c);
     }
-    else if (!b && file.is_open())
+
+    streambuf* buf;
+    ofstream& file;
+  };
+
+  ofstream file;
+  Tie in, out;
+
+public:
+  static void start(bool b) {
+
+    static Logger l;
+
+    if (b && !l.file.is_open())
     {
-        out.set(false);
-        in.set(false);
-        file.close();
+        l.file.open("io_log.txt", ifstream::out | ifstream::app);
+        cin.rdbuf(&l.in);
+        cout.rdbuf(&l.out);
+    }
+    else if (!b && l.file.is_open())
+    {
+        cout.rdbuf(l.out.buf);
+        cin.rdbuf(l.in.buf);
+        l.file.close();
     }
   }
-
-private:
-  Tee in, out;
-  ofstream file;
 };
 
-void logger_set(bool b) {
 
-  static Logger l;
-  l.set(b);
-}
+/// Trampoline helper to avoid moving Logger to misc.h
+void start_logger(bool b) { Logger::start(b); }
 
 
 /// cpu_count() tries to detect the number of CPU cores
@@ -203,16 +173,16 @@ int cpu_count() {
 #if defined(_WIN32) || defined(_WIN64)
   SYSTEM_INFO s;
   GetSystemInfo(&s);
-  return std::min(int(s.dwNumberOfProcessors), MAX_THREADS);
+  return s.dwNumberOfProcessors;
 #else
 
 #  if defined(_SC_NPROCESSORS_ONLN)
-  return std::min((int)sysconf(_SC_NPROCESSORS_ONLN), MAX_THREADS);
+  return sysconf(_SC_NPROCESSORS_ONLN);
 #  elif defined(__hpux)
   struct pst_dynamic psd;
   if (pstat_getdynamic(&psd, sizeof(psd), (size_t)1, 0) == -1)
       return 1;
-  return std::min((int)psd.psd_proc_cnt, MAX_THREADS);
+  return psd.psd_proc_cnt;
 #  else
   return 1;
 #  endif

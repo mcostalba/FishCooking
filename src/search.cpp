@@ -136,9 +136,9 @@ namespace {
   bool connected_moves(const Position& pos, Move m1, Move m2);
   Value value_to_tt(Value v, int ply);
   Value value_from_tt(Value v, int ply);
-  bool can_return_tt(const TTEntry* tte, Depth depth, Value beta, int ply);
+  bool can_return_tt(const TTEntry* tte, Depth depth, Value ttValue, Value beta);
   bool connected_threat(const Position& pos, Move m, Move threat);
-  Value refine_eval(const TTEntry* tte, Value defaultEval, int ply);
+  Value refine_eval(const TTEntry* tte, Value ttValue, Value defaultEval);
   Move do_skill_level();
   string score_to_uci(Value v, Value alpha = -VALUE_INFINITE, Value beta = VALUE_INFINITE);
   void pv_info_to_log(Position& pos, int depth, Value score, int time, Move pv[]);
@@ -254,7 +254,7 @@ void Search::think() {
   Chess960 = pos.is_chess960();
   Eval::RootColor = pos.side_to_move();
   SearchTime.restart();
-  TimeMgr.init(Limits, pos.startpos_ply_counter());
+  TimeMgr.init(Limits, pos.startpos_ply_counter(), pos.side_to_move());
   TT.new_search();
   H.clear();
 
@@ -292,13 +292,13 @@ void Search::think() {
       log << "\nSearching: "  << pos.to_fen()
           << "\ninfinite: "   << Limits.infinite
           << " ponder: "      << Limits.ponder
-          << " time: "        << Limits.time
-          << " increment: "   << Limits.increment
-          << " moves to go: " << Limits.movesToGo
+          << " time: "        << Limits.times[pos.side_to_move()]
+          << " increment: "   << Limits.incs[pos.side_to_move()]
+          << " moves to go: " << Limits.movestogo
           << endl;
   }
 
-  Threads.set_size(Options["Threads"]);
+  Threads.wake_up();
 
   // Set best timer interval to avoid lagging under time pressure. Timer is
   // used to check for remaining available thinking time.
@@ -310,9 +310,8 @@ void Search::think() {
   // We're ready to start searching. Call the iterative deepening loop function
   id_loop(pos);
 
-  // Stop timer and send all the slaves to sleep, if not already sleeping
-  Threads.set_timer(0);
-  Threads.set_size(1);
+  Threads.set_timer(0); // Stop timer
+  Threads.sleep();
 
   if (Options["Use Search Log"])
   {
@@ -363,7 +362,7 @@ namespace {
     ss->currentMove = MOVE_NULL; // Hack to skip update gains
 
     // Iterative deepening loop until requested to stop or target depth reached
-    while (!Signals.stop && ++depth <= MAX_PLY && (!Limits.maxDepth || depth <= Limits.maxDepth))
+    while (!Signals.stop && ++depth <= MAX_PLY && (!Limits.depth || depth <= Limits.depth))
     {
         // Save last iteration's scores before first PV line is searched and all
         // the move scores but the (new) PV are set to -VALUE_INFINITE.
@@ -542,7 +541,7 @@ namespace {
     Move ttMove, move, excludedMove, bestMove, threatMove;
     Depth ext, newDepth;
     Bound bt;
-    Value bestValue, value, oldAlpha;
+    Value bestValue, value, oldAlpha, ttValue;
     Value refinedValue, nullValue, futilityBase, futilityValue;
     bool isPvMove, inCheck, singularExtensionNode, givesCheck;
     bool captureOrPromotion, dangerous, doFullDepthSearch;
@@ -564,6 +563,7 @@ namespace {
     {
         tte = NULL;
         ttMove = excludedMove = MOVE_NONE;
+        ttValue = VALUE_ZERO;
         sp = ss->sp;
         bestMove = sp->bestMove;
         threatMove = sp->threatMove;
@@ -584,7 +584,7 @@ namespace {
 
     // Step 2. Check for aborted search and immediate draw
     // Enforce node limit here. FIXME: This only works with 1 search thread.
-    if (Limits.maxNodes && pos.nodes_searched() >= Limits.maxNodes)
+    if (Limits.nodes && pos.nodes_searched() >= Limits.nodes)
         Signals.stop = true;
 
     if ((   Signals.stop
@@ -613,19 +613,19 @@ namespace {
     posKey = excludedMove ? pos.exclusion_key() : pos.key();
     tte = TT.probe(posKey);
     ttMove = RootNode ? RootMoves[PVIdx].pv[0] : tte ? tte->move() : MOVE_NONE;
+    ttValue = tte ? value_from_tt(tte->value(), ss->ply) : VALUE_ZERO;
 
     // At PV nodes we check for exact scores, while at non-PV nodes we check for
     // a fail high/low. Biggest advantage at probing at PV nodes is to have a
     // smooth experience in analysis mode. We don't probe at Root nodes otherwise
     // we should also update RootMoveList to avoid bogus output.
     if (!RootNode && tte && (PvNode ? tte->depth() >= depth && tte->type() == BOUND_EXACT
-                                    : can_return_tt(tte, depth, beta, ss->ply)))
+                                    : can_return_tt(tte, depth, ttValue, beta)))
     {
         TT.refresh(tte);
         ss->currentMove = ttMove; // Can be MOVE_NONE
-        value = value_from_tt(tte->value(), ss->ply);
 
-        if (   value >= beta
+        if (   ttValue >= beta
             && ttMove
             && !pos.is_capture_or_promotion(ttMove)
             && ttMove != ss->killers[0])
@@ -633,7 +633,7 @@ namespace {
             ss->killers[1] = ss->killers[0];
             ss->killers[0] = ttMove;
         }
-        return value;
+        return ttValue;
     }
 
     // Step 5. Evaluate the position statically and update parent's gain statistics
@@ -645,7 +645,7 @@ namespace {
 
         ss->eval = tte->static_value();
         ss->evalMargin = tte->static_value_margin();
-        refinedValue = refine_eval(tte, ss->eval, ss->ply);
+        refinedValue = refine_eval(tte, ttValue, ss->eval);
     }
     else
     {
@@ -878,8 +878,6 @@ split_point_start: // At split points actual search starts from here
           && move == ttMove
           && pos.pl_move_is_legal(move, ci.pinned))
       {
-          Value ttValue = value_from_tt(tte->value(), ss->ply);
-
           if (abs(ttValue) < VALUE_KNOWN_WIN)
           {
               Value rBeta = ttValue - int(depth);
@@ -1139,7 +1137,7 @@ split_point_start: // At split points actual search starts from here
 
     StateInfo st;
     Move ttMove, move, bestMove;
-    Value bestValue, value, evalMargin, futilityValue, futilityBase;
+    Value ttValue, bestValue, value, evalMargin, futilityValue, futilityBase;
     bool inCheck, enoughMaterial, givesCheck, evasionPrunable;
     const TTEntry* tte;
     Depth ttDepth;
@@ -1163,11 +1161,12 @@ split_point_start: // At split points actual search starts from here
     // pruning, but only for move ordering.
     tte = TT.probe(pos.key());
     ttMove = (tte ? tte->move() : MOVE_NONE);
+    ttValue = tte ? value_from_tt(tte->value(),ss->ply) : VALUE_ZERO;
 
-    if (!PvNode && tte && can_return_tt(tte, ttDepth, beta, ss->ply))
+    if (!PvNode && tte && can_return_tt(tte, ttDepth, ttValue, beta))
     {
         ss->currentMove = ttMove; // Can be MOVE_NONE
-        return value_from_tt(tte->value(), ss->ply);
+        return ttValue;
     }
 
     // Evaluate the position statically
@@ -1485,9 +1484,7 @@ split_point_start: // At split points actual search starts from here
   // can_return_tt() returns true if a transposition table score can be used to
   // cut-off at a given point in search.
 
-  bool can_return_tt(const TTEntry* tte, Depth depth, Value beta, int ply) {
-
-    Value v = value_from_tt(tte->value(), ply);
+  bool can_return_tt(const TTEntry* tte, Depth depth, Value v, Value beta) {
 
     return   (   tte->depth() >= depth
               || v >= std::max(VALUE_MATE_IN_MAX_PLY, beta)
@@ -1501,11 +1498,9 @@ split_point_start: // At split points actual search starts from here
   // refine_eval() returns the transposition table score if possible, otherwise
   // falls back on static position evaluation.
 
-  Value refine_eval(const TTEntry* tte, Value defaultEval, int ply) {
+  Value refine_eval(const TTEntry* tte, Value v, Value defaultEval) {
 
       assert(tte);
-
-      Value v = value_from_tt(tte->value(), ply);
 
       if (   ((tte->type() & BOUND_LOWER) && v >= defaultEval)
           || ((tte->type() & BOUND_UPPER) && v < defaultEval))
@@ -1899,6 +1894,6 @@ void check_time() {
                    || stillAtFirstMove;
 
   if (   (Limits.use_time_management() && noMoreTime)
-      || (Limits.maxTime && e >= Limits.maxTime))
+      || (Limits.movetime && e >= Limits.movetime))
       Signals.stop = true;
 }

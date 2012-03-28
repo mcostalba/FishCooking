@@ -33,10 +33,10 @@ OptionsMap Options; // Global object
 namespace {
 
 /// 'On change' actions, triggered by an option's value change
-void on_logger(const UCIOption& o) { logger_set(o); }
+void on_logger(const UCIOption& opt) { start_logger(opt); }
 void on_eval(const UCIOption&) { Eval::init(); }
 void on_threads(const UCIOption&) { Threads.read_uci_options(); }
-void on_hash_size(const UCIOption& o) { TT.set_size(o); }
+void on_hash_size(const UCIOption& opt) { TT.set_size(opt); }
 void on_clear_hash(const UCIOption&) { TT.clear(); }
 
 /// Our case insensitive less() function as required by UCI protocol
@@ -73,7 +73,7 @@ OptionsMap::OptionsMap() {
   o["Cowardice"]                   = UCIOption(100, 0, 200, on_eval);
   o["Min Split Depth"]             = UCIOption(msd, 4, 7, on_threads);
   o["Max Threads per Split Point"] = UCIOption(5, 4, 8, on_threads);
-  o["Threads"]                     = UCIOption(cpus, 1, MAX_THREADS);
+  o["Threads"]                     = UCIOption(cpus, 1, MAX_THREADS, on_threads);
   o["Use Sleeping Threads"]        = UCIOption(true, on_threads);
   o["Hash"]                        = UCIOption(32, 4, 8192, on_hash_size);
   o["Clear Hash"]                  = UCIOption(on_clear_hash);

@@ -48,6 +48,11 @@ public:
   template<Color Us>
   Score king_shelter(const Position& pos, Square ksq);
 
+	template<Color Us>
+	unsigned char pawn_bishop_weight(Color c) {
+		return pawnBishopWeight[Us][c];
+	}
+
 private:
   template<Color Us>
   Score updateShelter(const Position& pos, Square ksq);
@@ -59,6 +64,7 @@ private:
   Score value;
   int halfOpenFiles[2];
   Score kingShelters[2];
+	unsigned char pawnBishopWeight[2][2];
 };
 
 

@@ -528,18 +528,6 @@ Value do_evaluate(const Position& pos, Value& margin) {
 
 
   // evaluate_pieces<>() assigns bonuses and penalties to the pieces of a given color
-	static const unsigned char pawn_stuck_value[64] =
-		{
-		0, 0, 0, 0, 0, 0, 0, 0,
-		1, 1, 2, 2, 2, 2, 1, 1,
-		1, 2, 3, 3, 3, 3, 2, 1,
-		1, 2, 3, 5, 5, 3, 2, 1,
-		1, 2, 3, 5, 5, 3, 2, 1,
-		1, 2, 3, 3, 3, 3, 2, 1,
-		1, 1, 2, 2, 2, 2, 1, 1,
-		0, 0, 0, 0, 0, 0, 0, 0
-		};
-
 
   template<PieceType Piece, Color Us, bool Trace>
   Score evaluate_pieces(const Position& pos, EvalInfo& ei, Score& mobility, Bitboard mobilityArea) {
@@ -617,17 +605,11 @@ Value do_evaluate(const Position& pos, Value& margin) {
         if (Piece == BISHOP)
         {
 						// Penalize bishops for sitting on the same squares as pawns
-						int pawnSame[2];
-						pawnSame[Us] = pawnSame[Them] = 0;
-						Bitboard b2 = pos.pieces(PAWN);
-						while (b2) {
-							Square s2 = pop_1st_bit(&b2);
-	            if (!opposite_colors(s, s2)) {
-								pawnSame[color_of(pos.piece_on(s2))] += pawn_stuck_value[s2];
-							}
-						}
-						//printf("%s, %d, %d\n", pos.to_fen().c_str(), pawnSame[Us], pawnSame[Them]);
-						score -= (pawnSame[Us] + pawnSame[Them] / 2) * make_score(2, 2);
+						Color bishopColor = color_of(s);
+						score -= (ei.pi->pawn_bishop_weight<Us>(bishopColor) + 
+											ei.pi->pawn_bishop_weight<Them>(bishopColor) / 2) * make_score(2, 2);
+						score += popcount<Max15>(pos.pieces(PAWN, Them) & ~ei.attackedBy[Them][PAWN] & 
+																		 same_color_squares(s) & squares_in_front_of(Us, s)) * make_score(0, 5);
 						
             // An important Chess960 pattern: A cornered bishop blocked by
             // a friendly pawn diagonally in front of it is a very serious

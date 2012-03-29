@@ -63,6 +63,18 @@ namespace {
 
   const Score PawnStructureWeight = S(233, 201);
 
+	const unsigned char PawnBlockBishopWeight[64] =
+	{
+		0, 0, 0, 0, 0, 0, 0, 0,
+		1, 1, 2, 2, 2, 2, 1, 1,
+		1, 2, 3, 3, 3, 3, 2, 1,
+		1, 2, 3, 5, 5, 3, 2, 1,
+		1, 2, 3, 5, 5, 3, 2, 1,
+		1, 2, 3, 3, 3, 3, 2, 1,
+		1, 1, 2, 2, 2, 2, 1, 1,
+		0, 0, 0, 0, 0, 0, 0, 0
+	};
+
   #undef S
 
   const File ShelterFile[8] = { FILE_B, FILE_B, FILE_C, FILE_D, FILE_E, FILE_F, FILE_G, FILE_G };
@@ -139,6 +151,8 @@ Score PawnInfoTable::evaluate_pawns(const Position& pos, Bitboard ourPawns,
   Score value = SCORE_ZERO;
   const Square* pl = pos.piece_list(Us, PAWN);
 
+	pi->pawnBishopWeight[Us][WHITE] = pi->pawnBishopWeight[Us][BLACK] = 0;
+
   // Loop through all pawns of the current color and score each pawn
   while ((s = *pl++) != SQ_NONE)
   {
@@ -146,6 +160,8 @@ Score PawnInfoTable::evaluate_pawns(const Position& pos, Bitboard ourPawns,
 
       f = file_of(s);
       r = rank_of(s);
+
+			pi->pawnBishopWeight[Us][color_of(s)] += PawnBlockBishopWeight[s];
 
       // This file cannot be half open
       pi->halfOpenFiles[Us] &= ~(1 << f);

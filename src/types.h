@@ -360,6 +360,10 @@ inline Rank rank_of(Square s) {
   return Rank(s >> 3);
 }
 
+inline Color color_of(Square s) {
+	return Color((rank_of(s) ^ file_of(s)) & 1);
+}
+
 inline Square mirror(Square s) {
   return Square(s ^ 7);
 }

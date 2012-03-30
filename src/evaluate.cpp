@@ -167,7 +167,7 @@ namespace {
   // happen in Chess960 games.
   const Score TrappedBishopA1H1Penalty = make_score(100, 100);
 
-  // Penalty for BNR that is not defended by anything
+  // Penalty for a minor piece that is not defended by anything
   const Score UndefendedPiecePenalty = make_score(25, 10);
 
   // The SpaceMask[Color] contains the area of the board which is considered

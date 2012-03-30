@@ -46,7 +46,7 @@ public:
   int has_open_file_to_right(Color c, File f) const;
 
   template<Color Us>
-  Score king_shelter(const Position& pos, Square ksq);
+  Score king_safety(const Position& pos, Square ksq);
 
 	template<Color Us>
 	unsigned char pawn_bishop_weight(Color c) {
@@ -55,7 +55,10 @@ public:
 
 private:
   template<Color Us>
-  Score updateShelter(const Position& pos, Square ksq);
+  Score update_safety(const Position& pos, Square ksq);
+
+  template<Color Us>
+  Value shelter_storm(const Position& pos, Square ksq);
 
   Key key;
   Bitboard passedPawns[2];
@@ -106,8 +109,8 @@ inline int PawnInfo::has_open_file_to_right(Color c, File f) const {
 }
 
 template<Color Us>
-inline Score PawnInfo::king_shelter(const Position& pos, Square ksq) {
-  return kingSquares[Us] == ksq ? kingShelters[Us] : updateShelter<Us>(pos, ksq);
+inline Score PawnInfo::king_safety(const Position& pos, Square ksq) {
+  return kingSquares[Us] == ksq ? kingShelters[Us] : update_safety<Us>(pos, ksq);
 }
 
 #endif // !defined(PAWNS_H_INCLUDED)

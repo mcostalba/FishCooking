@@ -147,7 +147,7 @@ Score PawnTable::evaluate_pawns(const Position& pos, Bitboard ourPawns,
   Score value = SCORE_ZERO;
   const Square* pl = pos.piece_list(Us, PAWN);
 
-	pi->pawnBishopWeight[Us][WHITE] = pi->pawnBishopWeight[Us][BLACK] = 0;
+	e->pawnBishopWeight[Us][WHITE] = e->pawnBishopWeight[Us][BLACK] = 0;
 
   // Loop through all pawns of the current color and score each pawn
   while ((s = *pl++) != SQ_NONE)
@@ -157,7 +157,7 @@ Score PawnTable::evaluate_pawns(const Position& pos, Bitboard ourPawns,
       f = file_of(s);
       r = rank_of(s);
 
-			pi->pawnBishopWeight[Us][color_of(s)] += PawnBlockBishopWeight[s];
+			e->pawnBishopWeight[Us][color_of(s)] += PawnBlockBishopWeight[s];
 
       // This file cannot be half open
       e->halfOpenFiles[Us] &= ~(1 << f);

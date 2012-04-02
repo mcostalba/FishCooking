@@ -93,57 +93,49 @@ namespace {
 
   #undef S
   #undef V
-
-  inline Score apply_weight(Score v, Score w) {
-    return make_score((int(mg_value(v)) * mg_value(w)) / 0x100,
-                      (int(eg_value(v)) * eg_value(w)) / 0x100);
-  }
 }
 
 
-/// PawnInfoTable::pawn_info() takes a position object as input, computes
-/// a PawnInfo object, and returns a pointer to it. The result is also stored
-/// in an hash table, so we don't have to recompute everything when the same
-/// pawn structure occurs again.
+/// PawnTable::probe() takes a position object as input, computes a PawnEntry
+/// object, and returns a pointer to it. The result is also stored in a hash
+/// table, so we don't have to recompute everything when the same pawn structure
+/// occurs again.
 
-PawnInfo* PawnInfoTable::pawn_info(const Position& pos) const {
+PawnEntry* PawnTable::probe(const Position& pos) {
 
   Key key = pos.pawn_key();
-  PawnInfo* pi = probe(key);
+  PawnEntry* e = entries[key];
 
-  // If pi->key matches the position's pawn hash key, it means that we
+  // If e->key matches the position's pawn hash key, it means that we
   // have analysed this pawn structure before, and we can simply return
   // the information we found the last time instead of recomputing it.
-  if (pi->key == key)
-      return pi;
+  if (e->key == key)
+      return e;
 
-  // Initialize PawnInfo entry
-  pi->key = key;
-  pi->passedPawns[WHITE] = pi->passedPawns[BLACK] = 0;
-  pi->kingSquares[WHITE] = pi->kingSquares[BLACK] = SQ_NONE;
-  pi->halfOpenFiles[WHITE] = pi->halfOpenFiles[BLACK] = 0xFF;
+  e->key = key;
+  e->passedPawns[WHITE] = e->passedPawns[BLACK] = 0;
+  e->kingSquares[WHITE] = e->kingSquares[BLACK] = SQ_NONE;
+  e->halfOpenFiles[WHITE] = e->halfOpenFiles[BLACK] = 0xFF;
 
-  // Calculate pawn attacks
   Bitboard wPawns = pos.pieces(PAWN, WHITE);
   Bitboard bPawns = pos.pieces(PAWN, BLACK);
-  pi->pawnAttacks[WHITE] = ((wPawns << 9) & ~FileABB) | ((wPawns << 7) & ~FileHBB);
-  pi->pawnAttacks[BLACK] = ((bPawns >> 7) & ~FileABB) | ((bPawns >> 9) & ~FileHBB);
+  e->pawnAttacks[WHITE] = ((wPawns & ~FileHBB) << 9) | ((wPawns & ~FileABB) << 7);
+  e->pawnAttacks[BLACK] = ((bPawns & ~FileHBB) >> 7) | ((bPawns & ~FileABB) >> 9);
 
-  // Evaluate pawns for both colors and weight the result
-  pi->value =  evaluate_pawns<WHITE>(pos, wPawns, bPawns, pi)
-             - evaluate_pawns<BLACK>(pos, bPawns, wPawns, pi);
+  e->value =  evaluate_pawns<WHITE>(pos, wPawns, bPawns, e)
+            - evaluate_pawns<BLACK>(pos, bPawns, wPawns, e);
 
-  pi->value = apply_weight(pi->value, PawnStructureWeight);
+  e->value = apply_weight(e->value, PawnStructureWeight);
 
-  return pi;
+  return e;
 }
 
 
-/// PawnInfoTable::evaluate_pawns() evaluates each pawn of the given color
+/// PawnTable::evaluate_pawns() evaluates each pawn of the given color
 
 template<Color Us>
-Score PawnInfoTable::evaluate_pawns(const Position& pos, Bitboard ourPawns,
-                                    Bitboard theirPawns, PawnInfo* pi) {
+Score PawnTable::evaluate_pawns(const Position& pos, Bitboard ourPawns,
+                                Bitboard theirPawns, PawnEntry* e) {
 
   const Color Them = (Us == WHITE ? BLACK : WHITE);
 
@@ -168,18 +160,18 @@ Score PawnInfoTable::evaluate_pawns(const Position& pos, Bitboard ourPawns,
 			pi->pawnBishopWeight[Us][color_of(s)] += PawnBlockBishopWeight[s];
 
       // This file cannot be half open
-      pi->halfOpenFiles[Us] &= ~(1 << f);
+      e->halfOpenFiles[Us] &= ~(1 << f);
 
       // Our rank plus previous one. Used for chain detection
       b = rank_bb(r) | rank_bb(Us == WHITE ? r - Rank(1) : r + Rank(1));
 
       // Flag the pawn as passed, isolated, doubled or member of a pawn
       // chain (but not the backward one).
-      passed   = !(theirPawns & passed_pawn_mask(Us, s));
+      chain    =   ourPawns   & adjacent_files_bb(f) & b;
+      isolated = !(ourPawns   & adjacent_files_bb(f));
       doubled  =   ourPawns   & squares_in_front_of(Us, s);
       opposed  =   theirPawns & squares_in_front_of(Us, s);
-      isolated = !(ourPawns   & adjacent_files_bb(f));
-      chain    =   ourPawns   & adjacent_files_bb(f) & b;
+      passed   = !(theirPawns & passed_pawn_mask(Us, s));
 
       // Test for backward pawn
       backward = false;
@@ -221,7 +213,7 @@ Score PawnInfoTable::evaluate_pawns(const Position& pos, Bitboard ourPawns,
       // full attack info to evaluate passed pawns. Only the frontmost passed
       // pawn on each file is considered a true passed pawn.
       if (passed && !doubled)
-          pi->passedPawns[Us] |= s;
+          e->passedPawns[Us] |= s;
 
       // Score this pawn
       if (isolated)
@@ -239,15 +231,16 @@ Score PawnInfoTable::evaluate_pawns(const Position& pos, Bitboard ourPawns,
       if (candidate)
           value += CandidateBonus[relative_rank(Us, s)];
   }
+
   return value;
 }
 
 
-/// PawnInfo::shelter_storm() calculates shelter and storm penalties for the file
+/// PawnEntry::shelter_storm() calculates shelter and storm penalties for the file
 /// the king is on, as well as the two adjacent files.
 
 template<Color Us>
-Value PawnInfo::shelter_storm(const Position& pos, Square ksq) {
+Value PawnEntry::shelter_storm(const Position& pos, Square ksq) {
 
   const Color Them = (Us == WHITE ? BLACK : WHITE);
 
@@ -277,16 +270,16 @@ Value PawnInfo::shelter_storm(const Position& pos, Square ksq) {
 }
 
 
-/// PawnInfo::update_safety() calculates and caches a bonus for king safety. It is
+/// PawnEntry::update_safety() calculates and caches a bonus for king safety. It is
 /// called only when king square changes, about 20% of total king_safety() calls.
 
 template<Color Us>
-Score PawnInfo::update_safety(const Position& pos, Square ksq) {
+Score PawnEntry::update_safety(const Position& pos, Square ksq) {
 
   kingSquares[Us] = ksq;
 
   if (relative_rank(Us, ksq) > RANK_4)
-      return kingShelters[Us] = SCORE_ZERO;
+      return kingSafety[Us] = SCORE_ZERO;
 
   Value bonus = shelter_storm<Us>(pos, ksq);
 
@@ -297,9 +290,9 @@ Score PawnInfo::update_safety(const Position& pos, Square ksq) {
   if (pos.can_castle(Us == WHITE ? WHITE_OOO : BLACK_OOO))
       bonus = std::max(bonus, shelter_storm<Us>(pos, relative_square(Us, SQ_C1)));
 
-  return kingShelters[Us] = make_score(bonus, 0);
+  return kingSafety[Us] = make_score(bonus, 0);
 }
 
 // Explicit template instantiation
-template Score PawnInfo::update_safety<WHITE>(const Position& pos, Square ksq);
-template Score PawnInfo::update_safety<BLACK>(const Position& pos, Square ksq);
+template Score PawnEntry::update_safety<WHITE>(const Position& pos, Square ksq);
+template Score PawnEntry::update_safety<BLACK>(const Position& pos, Square ksq);

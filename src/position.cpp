@@ -409,7 +409,7 @@ Bitboard Position::attackers_to(Square s, Bitboard occ) const {
 
 Bitboard Position::attacks_from(Piece p, Square s, Bitboard occ) {
 
-  assert(square_is_ok(s));
+  assert(is_ok(s));
 
   switch (type_of(p))
   {
@@ -427,7 +427,7 @@ Bitboard Position::attacks_from(Piece p, Square s, Bitboard occ) {
 bool Position::move_attacks_square(Move m, Square s) const {
 
   assert(is_ok(m));
-  assert(square_is_ok(s));
+  assert(is_ok(s));
 
   Bitboard occ, xray;
   Square from = from_sq(m);
@@ -903,8 +903,8 @@ void Position::do_move(Move m, StateInfo& newSt, const CheckInfo& ci, bool moveI
   }
 
   // Prefetch pawn and material hash tables
-  Threads[threadID].pawnTable.prefetch(st->pawnKey);
-  Threads[threadID].materialTable.prefetch(st->materialKey);
+  prefetch((char*)Threads[threadID].pawnTable.entries[st->pawnKey]);
+  prefetch((char*)Threads[threadID].materialTable.entries[st->materialKey]);
 
   // Update incremental scores
   st->value += pst_delta(piece, from, to);

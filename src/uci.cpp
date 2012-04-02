@@ -30,6 +30,8 @@
 
 using namespace std;
 
+extern void benchmark(istringstream& is);
+
 namespace {
 
   // FEN string of the initial position, normal chess
@@ -52,14 +54,17 @@ namespace {
 /// that we exit gracefully if the GUI dies unexpectedly. In addition to the UCI
 /// commands, the function also supports a few debug commands.
 
-void uci_loop() {
+void uci_loop(const string& args) {
 
   Position pos(StartFEN, false, 0); // The root position
   string cmd, token;
 
   while (token != "quit")
   {
-      if (!getline(cin, cmd)) // Block here waiting for input
+      if (!args.empty())
+          cmd = args;
+
+      else if (!getline(cin, cmd)) // Block here waiting for input
           cmd = "quit";
 
       istringstream is(cmd);
@@ -69,9 +74,7 @@ void uci_loop() {
       if (token == "quit" || token == "stop")
       {
           Search::Signals.stop = true;
-
-          if (token == "quit") // Cannot quit while threads are still running
-              Threads.wait_for_search_finished();
+          Threads.wait_for_search_finished(); // Cannot quit while threads are running
       }
 
       else if (token == "ponderhit")
@@ -82,7 +85,10 @@ void uci_loop() {
           Search::Limits.ponder = false;
 
           if (Search::Signals.stopOnPonderhit)
+          {
               Search::Signals.stop = true;
+              Threads.wait_for_search_finished(); // Wake up if is sleeping
+          }
       }
 
       else if (token == "go")
@@ -112,6 +118,9 @@ void uci_loop() {
       else if (token == "eval")
           cout << Eval::trace(pos) << endl;
 
+      else if (token == "bench")
+          benchmark(is);
+
       else if (token == "key")
           cout << "key: " << hex     << pos.key()
                << "\nmaterial key: " << pos.material_key()
@@ -123,6 +132,12 @@ void uci_loop() {
                << "\nuciok"      << endl;
       else
           cout << "Unknown command: " << cmd << endl;
+
+      if (!args.empty()) // Command line arguments have one-shot behaviour
+      {
+          Threads.wait_for_search_finished();
+          break;
+      }
   }
 }
 
@@ -197,19 +212,19 @@ namespace {
   void go(Position& pos, istringstream& is) {
 
     Search::LimitsType limits;
-    std::set<Move> searchMoves;
+    vector<Move> searchMoves;
     string token;
 
     while (is >> token)
     {
         if (token == "wtime")
-            is >> limits.times[WHITE];
+            is >> limits.time[WHITE];
         else if (token == "btime")
-            is >> limits.times[BLACK];
+            is >> limits.time[BLACK];
         else if (token == "winc")
-            is >> limits.incs[WHITE];
+            is >> limits.inc[WHITE];
         else if (token == "binc")
-            is >> limits.incs[BLACK];
+            is >> limits.inc[BLACK];
         else if (token == "movestogo")
             is >> limits.movestogo;
         else if (token == "depth")
@@ -224,7 +239,7 @@ namespace {
             limits.ponder = true;
         else if (token == "searchmoves")
             while (is >> token)
-                searchMoves.insert(move_from_uci(pos, token));
+                searchMoves.push_back(move_from_uci(pos, token));
     }
 
     Threads.start_searching(pos, limits, searchMoves);
@@ -248,8 +263,8 @@ namespace {
 
     int e = time.elapsed();
 
-    std::cout << "\nNodes " << n
-              << "\nTime (ms) " << e
-              << "\nNodes/second " << int(n / (e / 1000.0)) << std::endl;
+    cout << "\nNodes " << n
+         << "\nTime (ms) " << e
+         << "\nNodes/second " << int(n / (e / 1000.0)) << endl;
   }
 }

@@ -297,6 +297,12 @@ inline Score operator/(Score s, int i) {
   return make_score(mg_value(s) / i, eg_value(s) / i);
 }
 
+/// Weight score v by score w trying to prevent overflow
+inline Score apply_weight(Score v, Score w) {
+  return make_score((int(mg_value(v)) * mg_value(w)) / 0x100,
+                    (int(eg_value(v)) * eg_value(w)) / 0x100);
+}
+
 #undef ENABLE_OPERATORS_ON
 #undef ENABLE_SAFE_OPERATORS_ON
 
@@ -321,7 +327,7 @@ inline Color operator~(Color c) {
 }
 
 inline Square operator~(Square s) {
-  return Square(s ^ 56);
+  return Square(s ^ 56); // Vertical flip SQ_A1 -> SQ_A8
 }
 
 inline Value mate_in(int ply) {
@@ -348,7 +354,7 @@ inline Square make_square(File f, Rank r) {
   return Square((r << 3) | f);
 }
 
-inline bool square_is_ok(Square s) {
+inline bool is_ok(Square s) {
   return s >= SQ_A1 && s <= SQ_H8;
 }
 
@@ -365,7 +371,7 @@ inline Color color_of(Square s) {
 }
 
 inline Square mirror(Square s) {
-  return Square(s ^ 7);
+  return Square(s ^ 7); // Horizontal flip SQ_A1 -> SQ_H1
 }
 
 inline Square relative_square(Color c, Square s) {

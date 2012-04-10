@@ -512,6 +512,10 @@ namespace {
     }
   }
 
+  bool safeNull(const Position &pos) {
+	  return pos.non_pawn_material(pos.side_to_move()) &&
+			!pos.all_check_blockers();
+  }
 
   // search<>() is the main search function for both PV and non-PV nodes and for
   // normal and SplitPoint nodes. When called just after a split point the search
@@ -634,7 +638,12 @@ namespace {
         return ttValue;
     }
 
-    // Step 5. Evaluate the position statically and update parent's gain statistics
+	/*if (pos.to_fen().find("7k/6R1/2p2B2/2P4p/5p2/5P2/4P1K1/4q3") == 0)
+	{
+		printf("%d\n",safeNull(pos));
+	}*/
+
+	// Step 5. Evaluate the position statically and update parent's gain statistics
     if (inCheck)
         ss->eval = ss->evalMargin = VALUE_NONE;
     else if (tte)
@@ -689,7 +698,7 @@ namespace {
         && !inCheck
         &&  refinedValue - futility_margin(depth, 0) >= beta
         &&  abs(beta) < VALUE_MATE_IN_MAX_PLY
-        &&  pos.non_pawn_material(pos.side_to_move()))
+        &&  safeNull(pos))
         return refinedValue - futility_margin(depth, 0);
 
     // Step 8. Null move search with verification search (is omitted in PV nodes)
@@ -699,7 +708,7 @@ namespace {
         && !inCheck
         &&  refinedValue >= beta
         &&  abs(beta) < VALUE_MATE_IN_MAX_PLY
-        &&  pos.non_pawn_material(pos.side_to_move()))
+		&&  safeNull(pos))
     {
         ss->currentMove = MOVE_NULL;
 

@@ -363,7 +363,9 @@ void Position::print(Move move) const {
 /// king) pieces for the given color. Or, when template parameter FindPinned is
 /// false, the function return the pieces of the given color candidate for a
 /// discovery check against the enemy king.
-template<bool FindPinned>
+/// If EnemiesOnly is true, it only returns enemy pieces that are pinned.  If false,
+/// it will return any pieces that are preventing the enemy king from being checked.
+template<bool FindPinned, bool EnemiesOnly>
 Bitboard Position::hidden_checkers() const {
 
   // Pinned pieces protect our king, dicovery checks attack the enemy king
@@ -379,15 +381,18 @@ Bitboard Position::hidden_checkers() const {
   {
       b = squares_between(ksq, pop_1st_bit(&pinners)) & pieces();
 
-      if (b && single_bit(b) && (b & pieces(sideToMove)))
-          result |= b;
+      if (b && single_bit(b))
+		  if (!EnemiesOnly || (b & pieces(sideToMove)))
+	          result |= b;
   }
   return result;
 }
 
 // Explicit template instantiations
-template Bitboard Position::hidden_checkers<true>() const;
-template Bitboard Position::hidden_checkers<false>() const;
+template Bitboard Position::hidden_checkers<true, true>() const;
+template Bitboard Position::hidden_checkers<false, true>() const;
+template Bitboard Position::hidden_checkers<true, false>() const;
+template Bitboard Position::hidden_checkers<false, false>() const;
 
 
 /// Position::attackers_to() computes a bitboard of all pieces which attack a

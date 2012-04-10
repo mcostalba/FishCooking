@@ -133,6 +133,7 @@ public:
   // Bitboards for pinned pieces and discovered check candidates
   Bitboard discovered_check_candidates() const;
   Bitboard pinned_pieces() const;
+  Bitboard all_check_blockers() const;
 
   // Checking pieces and under check information
   Bitboard checkers() const;
@@ -213,7 +214,7 @@ private:
 
   // Helper template functions
   template<bool Do> void do_castle_move(Move m);
-  template<bool FindPinned> Bitboard hidden_checkers() const;
+  template<bool FindPinned, bool EnemiesOnly> Bitboard hidden_checkers() const;
 
   // Computing hash keys from scratch (for initialization and debugging)
   Key compute_key() const;
@@ -369,11 +370,15 @@ inline bool Position::in_check() const {
 }
 
 inline Bitboard Position::discovered_check_candidates() const {
-  return hidden_checkers<false>();
+  return hidden_checkers<false, true>();
 }
 
 inline Bitboard Position::pinned_pieces() const {
-  return hidden_checkers<true>();
+  return hidden_checkers<true, true>();
+}
+
+inline Bitboard Position::all_check_blockers() const {
+  return hidden_checkers<true, false>();
 }
 
 inline bool Position::pawn_is_passed(Color c, Square s) const {

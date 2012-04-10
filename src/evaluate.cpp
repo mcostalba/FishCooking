@@ -577,8 +577,12 @@ Value do_evaluate(const Position& pos, Value& margin) {
 
             assert(b);
 
-            if (single_bit(b) && (b & pos.pieces(Them)))
-                score += ThreatBonus[Piece][type_of(pos.piece_on(first_1(b)))];
+            if (single_bit(b)) {
+				if (b & pos.pieces(Them))
+					score += ThreatBonus[Piece][type_of(pos.piece_on(first_1(b)))];
+				else
+					score += make_score(30, 70);
+			}
         }
 
         // Decrease score if we are attacked by an enemy pawn. Remaining part

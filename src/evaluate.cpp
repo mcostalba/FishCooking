@@ -585,7 +585,7 @@ Value do_evaluate(const Position& pos, Value& margin) {
 				if (b & pos.pieces(Them))
 					score += ThreatBonus[Piece][type_of(pos.piece_on(first_1(b)))];
 				else
-					score += make_score(30, 70);
+					score += make_score(20, 50);
 			}
         }
 

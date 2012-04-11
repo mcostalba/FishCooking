@@ -584,7 +584,7 @@ Value do_evaluate(const Position& pos, Value& margin) {
             if (single_bit(b)) {
                 if (b & pos.pieces(Them))
                     score += ThreatBonus[Piece][type_of(pos.piece_on(first_1(b)))];
-                else
+				else if (pos.side_to_move() == Us && (b & ~pos.pieces(PAWN)))
                     score += make_score(20, 50);
             }
         }

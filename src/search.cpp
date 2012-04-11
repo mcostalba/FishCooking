@@ -637,11 +637,6 @@ namespace {
         return ttValue;
     }
 
-	/*if (pos.to_fen().find("7k/6R1/2p2B2/2P4p/5p2/5P2/4P1K1/4q3") == 0)
-	{
-		printf("%d\n",safeNull(pos));
-	}*/
-
 	// Step 5. Evaluate the position statically and update parent's gain statistics
     if (inCheck)
         ss->eval = ss->evalMargin = VALUE_NONE;
@@ -707,7 +702,7 @@ namespace {
         && !inCheck
         &&  refinedValue >= beta
         &&  abs(beta) < VALUE_MATE_IN_MAX_PLY
-		&&  safeNull(pos))
+        &&  safeNull(pos))
     {
         ss->currentMove = MOVE_NULL;
 

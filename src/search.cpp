@@ -1085,7 +1085,7 @@ split_point_start: // At split points actual search starts from here
         bt   = bestValue <= oldAlpha ? BOUND_UPPER
              : bestValue >= beta ? BOUND_LOWER : BOUND_EXACT;
 
-        TT.store(posKey, value_to_tt(bestValue, ss->ply), bt, depth, move, ss->eval, ss->evalMargin);
+		TT.store(posKey, value_to_tt(bestValue, ss->ply), bt, ss->evalMargin ? depth / 2 : depth, move, ss->eval, ss->evalMargin);
 
         // Update killers and history for non capture cut-off moves
         if (    bestValue >= beta

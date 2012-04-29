@@ -19,13 +19,14 @@
 
 #include <fstream>
 #include <iostream>
-#include <sstream>
+#include <istream>
 #include <vector>
 
 #include "misc.h"
 #include "position.h"
 #include "search.h"
 #include "thread.h"
+#include "tt.h"
 #include "ucioption.h"
 
 using namespace std;
@@ -58,11 +59,11 @@ static const char* Defaults[] = {
 /// format (defaults are the positions defined above) and the type of the
 /// limit value: depth (default), time in secs or number of nodes.
 
-void benchmark(istringstream& is) {
+void benchmark(const Position& current, istream& is) {
 
   string token;
   Search::LimitsType limits;
-  vector<string> fens(Defaults, Defaults + 16);
+  vector<string> fens;
 
   // Assign default values to missing arguments
   string ttSize    = (is >> token) ? token : "128";
@@ -73,6 +74,7 @@ void benchmark(istringstream& is) {
 
   Options["Hash"]    = ttSize;
   Options["Threads"] = threads;
+  TT.clear();
 
   if (limitType == "time")
       limits.movetime = 1000 * atoi(limit.c_str()); // movetime is in ms
@@ -83,9 +85,14 @@ void benchmark(istringstream& is) {
   else
       limits.depth = atoi(limit.c_str());
 
-  if (fenFile != "default")
+  if (fenFile == "default")
+      fens.assign(Defaults, Defaults + 16);
+
+  else if (fenFile == "current")
+      fens.push_back(current.to_fen());
+
+  else
   {
-      fens.clear();
       string fen;
       ifstream file(fenFile.c_str());
 
@@ -107,7 +114,7 @@ void benchmark(istringstream& is) {
 
   for (size_t i = 0; i < fens.size(); i++)
   {
-      Position pos(fens[i], false, 0);
+      Position pos(fens[i], Options["UCI_Chess960"], Threads.main_thread());
 
       cerr << "\nPosition: " << i + 1 << '/' << fens.size() << endl;
 

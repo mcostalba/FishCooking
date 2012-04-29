@@ -77,7 +77,7 @@ namespace {
     string fen =  sides[0] + char('0' + int(8 - code.length()))
                 + sides[1] + "/8/8/8/8/8/8/8 w - - 0 10";
 
-    return Position(fen, false, 0).material_key();
+    return Position(fen, false, NULL).material_key();
   }
 
   template<typename M>
@@ -148,7 +148,7 @@ Value Endgame<KXK>::operator()(const Position& pos) const {
 
   if (   pos.piece_count(strongerSide, QUEEN)
       || pos.piece_count(strongerSide, ROOK)
-      || pos.both_color_bishops(strongerSide)) {
+      || pos.bishop_pair(strongerSide)) {
     result += VALUE_KNOWN_WIN;
   }
 
@@ -410,7 +410,7 @@ ScaleFactor Endgame<KBPsK>::operator()(const Position& pos) const {
   File pawnFile = file_of(pos.piece_list(strongerSide, PAWN)[0]);
 
   // All pawns are on a single rook file ?
-  if (   (pawnFile == FILE_A || pawnFile == FILE_H)
+  if (    (pawnFile == FILE_A || pawnFile == FILE_H)
       && !(pawns & ~file_bb(pawnFile)))
   {
       Square bishopSq = pos.piece_list(strongerSide, BISHOP)[0];
@@ -650,7 +650,7 @@ ScaleFactor Endgame<KPsK>::operator()(const Position& pos) const {
   {
       // Does the defending king block the pawns?
       if (   square_distance(ksq, relative_square(strongerSide, SQ_A8)) <= 1
-          || (   file_of(ksq) == FILE_A
+          || (    file_of(ksq) == FILE_A
               && !in_front_bb(strongerSide, ksq) & pawns))
           return SCALE_FACTOR_DRAW;
   }
@@ -659,7 +659,7 @@ ScaleFactor Endgame<KPsK>::operator()(const Position& pos) const {
   {
     // Does the defending king block the pawns?
     if (   square_distance(ksq, relative_square(strongerSide, SQ_H8)) <= 1
-        || (   file_of(ksq) == FILE_H
+        || (    file_of(ksq) == FILE_H
             && !in_front_bb(strongerSide, ksq) & pawns))
         return SCALE_FACTOR_DRAW;
   }
@@ -710,7 +710,7 @@ ScaleFactor Endgame<KBPKB>::operator()(const Position& pos) const {
           return SCALE_FACTOR_DRAW;
       else
       {
-          Bitboard path = squares_in_front_of(strongerSide, pawnSq);
+          Bitboard path = forward_bb(strongerSide, pawnSq);
 
           if (path & pos.pieces(KING, weakerSide))
               return SCALE_FACTOR_DRAW;

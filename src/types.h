@@ -79,8 +79,8 @@ const bool Is64Bit = false;
 typedef uint64_t Key;
 typedef uint64_t Bitboard;
 
-const int MAX_MOVES      = 256;
-const int MAX_PLY        = 256;
+const int MAX_MOVES      = 192;
+const int MAX_PLY        = 100;
 const int MAX_PLY_PLUS_2 = MAX_PLY + 2;
 
 const Bitboard FileABB = 0x0101010101010101ULL;
@@ -134,6 +134,11 @@ enum CastleRight {
   WHITE_OOO    = 4,
   BLACK_OOO    = 8,
   ALL_CASTLES  = 15
+};
+
+enum CastlingSide {
+  KING_SIDE,
+  QUEEN_SIDE
 };
 
 enum ScaleFactor {
@@ -320,7 +325,6 @@ const Value QueenValueEndgame  = Value(0x9FE);
 extern const Value PieceValueMidgame[17]; // Indexed by Piece or PieceType
 extern const Value PieceValueEndgame[17];
 extern int SquareDistance[64][64];
-extern uint8_t BitCount8Bit[256];
 
 inline Color operator~(Color c) {
   return Color(c ^ 1);
@@ -340,6 +344,10 @@ inline Value mated_in(int ply) {
 
 inline Piece make_piece(Color c, PieceType pt) {
   return Piece((c << 3) | pt);
+}
+
+inline CastleRight make_castle_right(Color c, CastlingSide s) {
+  return CastleRight((s == KING_SIDE ? WHITE_OO : WHITE_OOO) << c);
 }
 
 inline PieceType type_of(Piece p)  {

@@ -176,11 +176,11 @@ namespace {
     }
 
     // Test for a capture that triggers a pawn endgame
-    if (   captureOrPromotion
-        && type_of(pos.piece_on(to_sq(m))) != PAWN
+    if (    captureOrPromotion
+        &&  type_of(pos.piece_on(to_sq(m))) != PAWN
+        && !is_special(m)
         && (  pos.non_pawn_material(WHITE) + pos.non_pawn_material(BLACK)
-            - PieceValueMidgame[pos.piece_on(to_sq(m))] == VALUE_ZERO)
-        && !is_special(m))
+            - PieceValueMidgame[pos.piece_on(to_sq(m))] == VALUE_ZERO))
         return true;
 
     return false;
@@ -265,7 +265,7 @@ void Search::think() {
       goto finalize;
   }
 
-  if (Options["OwnBook"])
+  if (Options["OwnBook"] && !Limits.infinite)
   {
       Move bookMove = book.probe(pos, Options["Book File"], Options["Best Book Move"]);
 
@@ -332,7 +332,7 @@ finalize:
   // but if we are pondering or in infinite search, we shouldn't print the best
   // move before we are told to do so.
   if (!Signals.stop && (Limits.ponder || Limits.infinite))
-      Threads[pos.thread()].wait_for_stop_or_ponderhit();
+      pos.this_thread()->wait_for_stop_or_ponderhit();
 
   // Best move could be MOVE_NONE when searching on a stalemate position
   cout << "bestmove " << move_to_uci(RootMoves[0].pv[0], Chess960)
@@ -530,9 +530,8 @@ namespace {
     assert(alpha >= -VALUE_INFINITE && alpha < beta && beta <= VALUE_INFINITE);
     assert((alpha == beta - 1) || PvNode);
     assert(depth > DEPTH_ZERO);
-    assert(pos.thread() >= 0 && pos.thread() < Threads.size());
 
-    Move movesSearched[MAX_MOVES];
+    Move movesSearched[64];
     StateInfo st;
     const TTEntry *tte;
     Key posKey;
@@ -544,7 +543,7 @@ namespace {
     bool isPvMove, inCheck, singularExtensionNode, givesCheck;
     bool captureOrPromotion, dangerous, doFullDepthSearch;
     int moveCount = 0, playedMoveCount = 0;
-    Thread& thread = Threads[pos.thread()];
+    Thread* thisThread = pos.this_thread();
     SplitPoint* sp = NULL;
 
     refinedValue = bestValue = value = -VALUE_INFINITE;
@@ -553,8 +552,8 @@ namespace {
     ss->ply = (ss-1)->ply + 1;
 
     // Used to send selDepth info to GUI
-    if (PvNode && thread.maxPly < ss->ply)
-        thread.maxPly = ss->ply;
+    if (PvNode && thisThread->maxPly < ss->ply)
+        thisThread->maxPly = ss->ply;
 
     // Step 1. Initialize node
     if (SpNode)
@@ -623,10 +622,10 @@ namespace {
         TT.refresh(tte);
         ss->currentMove = ttMove; // Can be MOVE_NONE
 
-        if (   ttValue >= beta
-            && ttMove
+        if (    ttValue >= beta
+            &&  ttMove
             && !pos.is_capture_or_promotion(ttMove)
-            && ttMove != ss->killers[0])
+            &&  ttMove != ss->killers[0])
         {
             ss->killers[1] = ss->killers[0];
             ss->killers[0] = ttMove;
@@ -653,9 +652,9 @@ namespace {
 
     // Update gain for the parent non-capture move given the static position
     // evaluation before and after the move.
-    if (   (move = (ss-1)->currentMove) != MOVE_NULL
-        && (ss-1)->eval != VALUE_NONE
-        && ss->eval != VALUE_NONE
+    if (    (move = (ss-1)->currentMove) != MOVE_NULL
+        &&  (ss-1)->eval != VALUE_NONE
+        &&  ss->eval != VALUE_NONE
         && !pos.captured_piece_type()
         && !is_special(move))
     {
@@ -670,7 +669,7 @@ namespace {
         &&  refinedValue + razor_margin(depth) < beta
         &&  ttMove == MOVE_NONE
         &&  abs(beta) < VALUE_MATE_IN_MAX_PLY
-        && !pos.has_pawn_on_7th(pos.side_to_move()))
+        && !pos.pawn_on_7th(pos.side_to_move()))
     {
         Value rbeta = beta - razor_margin(depth);
         Value v = qsearch<NonPV>(pos, ss, rbeta-1, rbeta, DEPTH_ZERO);
@@ -807,17 +806,17 @@ split_point_start: // At split points actual search starts from here
     futilityBase = ss->eval + ss->evalMargin;
     singularExtensionNode =   !RootNode
                            && !SpNode
-                           && depth >= SingularExtensionDepth[PvNode]
-                           && ttMove != MOVE_NONE
+                           &&  depth >= SingularExtensionDepth[PvNode]
+                           &&  ttMove != MOVE_NONE
                            && !excludedMove // Recursive singular search is not allowed
                            && (tte->type() & BOUND_LOWER)
-                           && tte->depth() >= depth - 3 * ONE_PLY;
+                           &&  tte->depth() >= depth - 3 * ONE_PLY;
 
     // Step 11. Loop through moves
     // Loop through all pseudo-legal moves until no moves remain or a beta cutoff occurs
-    while (   bestValue < beta
+    while (    bestValue < beta
            && (move = mp.next_move()) != MOVE_NONE
-           && !thread.cutoff_occurred()
+           && !thisThread->cutoff_occurred()
            && !Signals.stop)
     {
       assert(is_ok(move));
@@ -847,7 +846,7 @@ split_point_start: // At split points actual search starts from here
       {
           Signals.firstRootMove = (moveCount == 1);
 
-          if (pos.thread() == 0 && SearchTime.elapsed() > 2000)
+          if (thisThread == Threads.main_thread() && SearchTime.elapsed() > 2000)
               cout << "info depth " << depth / ONE_PLY
                    << " currmove " << move_to_uci(move, Chess960)
                    << " currmovenumber " << moveCount + PVIdx << endl;
@@ -871,10 +870,10 @@ split_point_start: // At split points actual search starts from here
       // is singular and should be extended. To verify this we do a reduced search
       // on all the other moves but the ttMove, if result is lower than ttValue minus
       // a margin then we extend ttMove.
-      if (   singularExtensionNode
+      if (    singularExtensionNode
           && !ext
-          && move == ttMove
-          && pos.pl_move_is_legal(move, ci.pinned))
+          &&  move == ttMove
+          &&  pos.pl_move_is_legal(move, ci.pinned))
       {
           if (abs(ttValue) < VALUE_KNOWN_WIN)
           {
@@ -945,7 +944,7 @@ split_point_start: // At split points actual search starts from here
       }
 
       ss->currentMove = move;
-      if (!SpNode && !captureOrPromotion)
+      if (!SpNode && !captureOrPromotion && playedMoveCount < 64)
           movesSearched[playedMoveCount++] = move;
 
       // Step 14. Make the move
@@ -953,7 +952,7 @@ split_point_start: // At split points actual search starts from here
 
       // Step 15. Reduced depth search (LMR). If the move fails high will be
       // re-searched at full depth.
-      if (   depth > 3 * ONE_PLY
+      if (    depth > 3 * ONE_PLY
           && !isPvMove
           && !captureOrPromotion
           && !dangerous
@@ -1039,7 +1038,7 @@ split_point_start: // At split points actual search starts from here
               && value < beta) // We want always alpha < beta
               alpha = value;
 
-          if (SpNode && !thread.cutoff_occurred())
+          if (SpNode && !thisThread->cutoff_occurred())
           {
               sp->bestValue = value;
               sp->bestMove = move;
@@ -1052,11 +1051,11 @@ split_point_start: // At split points actual search starts from here
 
       // Step 19. Check for split
       if (   !SpNode
-          && depth >= Threads.min_split_depth()
-          && bestValue < beta
-          && Threads.available_slave_exists(pos.thread())
+          &&  depth >= Threads.min_split_depth()
+          &&  bestValue < beta
+          &&  Threads.available_slave_exists(thisThread)
           && !Signals.stop
-          && !thread.cutoff_occurred())
+          && !thisThread->cutoff_occurred())
           bestValue = Threads.split<FakeSplit>(pos, ss, alpha, beta, bestValue, &bestMove,
                                                depth, threatMove, moveCount, &mp, NT);
     }
@@ -1080,7 +1079,7 @@ split_point_start: // At split points actual search starts from here
 
     // Step 21. Update tables
     // Update transposition table entry, killers and history
-    if (!SpNode && !Signals.stop && !thread.cutoff_occurred())
+    if (!SpNode && !Signals.stop && !thisThread->cutoff_occurred())
     {
         move = bestValue <= oldAlpha ? MOVE_NONE : bestMove;
         bt   = bestValue <= oldAlpha ? BOUND_UPPER
@@ -1131,7 +1130,6 @@ split_point_start: // At split points actual search starts from here
     assert(alpha >= -VALUE_INFINITE && alpha < beta && beta <= VALUE_INFINITE);
     assert((alpha == beta - 1) || PvNode);
     assert(depth <= DEPTH_ZERO);
-    assert(pos.thread() >= 0 && pos.thread() < Threads.size());
 
     StateInfo st;
     Move ttMove, move, bestMove;
@@ -1247,8 +1245,8 @@ split_point_start: // At split points actual search starts from here
 
       // Detect non-capture evasions that are candidate to be pruned
       evasionPrunable =   !PvNode
-                       && inCheck
-                       && bestValue > VALUE_MATED_IN_MAX_PLY
+                       &&  inCheck
+                       &&  bestValue > VALUE_MATED_IN_MAX_PLY
                        && !pos.is_capture(move)
                        && !pos.can_castle(pos.side_to_move());
 
@@ -1339,7 +1337,7 @@ split_point_start: // At split points actual search starts from here
     // Rule 1. Checks which give opponent's king at most one escape square are dangerous
     b = kingAtt & ~pos.pieces(them) & ~newAtt & ~(1ULL << to);
 
-    if (single_bit(b)) // Catches also !b
+    if (!more_than_one(b))
         return true;
 
     // Rule 2. Queen contact check is very dangerous
@@ -1388,7 +1386,7 @@ split_point_start: // At split points actual search starts from here
 
     // Case 3: Moving through the vacated square
     p2 = pos.piece_on(f2);
-    if (piece_is_slider(p2) && (squares_between(f2, t2) & f1))
+    if (piece_is_slider(p2) && (between_bb(f2, t2) & f1))
       return true;
 
     // Case 4: The destination square for m2 is defended by the moving piece in m1
@@ -1399,7 +1397,7 @@ split_point_start: // At split points actual search starts from here
     // Case 5: Discovered check, checking piece is the piece moved in m1
     ksq = pos.king_square(pos.side_to_move());
     if (    piece_is_slider(p1)
-        && (squares_between(t1, ksq) & f2)
+        && (between_bb(t1, ksq) & f2)
         && (pos.attacks_from(p1, t1, pos.pieces() ^ f2) & ksq))
         return true;
 
@@ -1471,7 +1469,7 @@ split_point_start: // At split points actual search starts from here
     // Case 3: If the moving piece in the threatened move is a slider, don't
     // prune safe moves which block its ray.
     if (    piece_is_slider(pos.piece_on(tfrom))
-        && (squares_between(tfrom, tto) & mto)
+        && (between_bb(tfrom, tto) & mto)
         &&  pos.see_sign(m) >= 0)
         return true;
 
@@ -1827,8 +1825,7 @@ void Thread::idle_loop(SplitPoint* sp_master) {
           lock_release(Threads.splitLock);
 
           Stack ss[MAX_PLY_PLUS_2];
-          Position pos(*sp->pos, threadID);
-          int master = sp->master;
+          Position pos(*sp->pos, this);
 
           memcpy(ss, sp->ss - 1, 4 * sizeof(Stack));
           (ss+1)->sp = sp;
@@ -1847,20 +1844,21 @@ void Thread::idle_loop(SplitPoint* sp_master) {
           assert(is_searching);
 
           is_searching = false;
-          sp->slavesMask &= ~(1ULL << threadID);
+          sp->slavesMask &= ~(1ULL << idx);
           sp->nodes += pos.nodes_searched();
-
-          // After releasing the lock we cannot access anymore any SplitPoint
-          // related data in a reliably way becuase it could have been released
-          // under our feet by the sp master.
-          lock_release(sp->lock);
 
           // Wake up master thread so to allow it to return from the idle loop in
           // case we are the last slave of the split point.
-          if (   Threads.use_sleeping_threads()
-              && threadID != master
-              && !Threads[master].is_searching)
-              Threads[master].wake_up();
+          if (    Threads.use_sleeping_threads()
+              &&  this != sp->master
+              && !sp->master->is_searching)
+              sp->master->wake_up();
+
+          // After releasing the lock we cannot access anymore any SplitPoint
+          // related data in a safe way becuase it could have been released under
+          // our feet by the sp master. Also accessing other Thread objects is
+          // unsafe because if we are exiting there is a chance are already freed.
+          lock_release(sp->lock);
       }
   }
 }

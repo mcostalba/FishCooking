@@ -32,27 +32,20 @@
                                          (*mlist++).move = make_move(to - (d), to); }
 namespace {
 
-  enum CastlingSide { KING_SIDE, QUEEN_SIDE };
-
   template<CastlingSide Side, bool OnlyChecks>
   MoveStack* generate_castle(const Position& pos, MoveStack* mlist, Color us) {
 
-    const CastleRight CR[] = { Side ? WHITE_OOO : WHITE_OO,
-                               Side ? BLACK_OOO : BLACK_OO };
-
-    if (pos.castle_impeded(CR[us]) || !pos.can_castle(CR[us]))
+    if (pos.castle_impeded(us, Side) || !pos.can_castle(make_castle_right(us, Side)))
         return mlist;
 
     // After castling, the rook and king final positions are the same in Chess960
     // as they would be in standard chess.
     Square kfrom = pos.king_square(us);
-    Square rfrom = pos.castle_rook_square(CR[us]);
+    Square rfrom = pos.castle_rook_square(us, Side);
     Square kto = relative_square(us, Side == KING_SIDE ? SQ_G1 : SQ_C1);
     Bitboard enemies = pos.pieces(~us);
 
     assert(!pos.in_check());
-    assert(pos.piece_on(kfrom) == make_piece(us, KING));
-    assert(pos.piece_on(rfrom) == make_piece(us, ROOK));
 
     for (Square s = std::min(kfrom, kto), e = std::max(kfrom, kto); s <= e; s++)
         if (    s != kfrom // We are not in check
@@ -417,7 +410,7 @@ MoveStack* generate<MV_EVASION>(const Position& pos, MoveStack* mlist) {
           // If queen and king are far or not on a diagonal line we can safely
           // remove all the squares attacked in the other direction becuase are
           // not reachable by the king anyway.
-          if (squares_between(ksq, checksq) || !(PseudoAttacks[BISHOP][checksq] & ksq))
+          if (between_bb(ksq, checksq) || !(PseudoAttacks[BISHOP][checksq] & ksq))
               sliderAttacks |= PseudoAttacks[QUEEN][checksq];
 
           // Otherwise we need to use real rook attacks to check if king is safe
@@ -441,7 +434,7 @@ MoveStack* generate<MV_EVASION>(const Position& pos, MoveStack* mlist) {
       return mlist;
 
   // Blocking evasions or captures of the checking piece
-  target = squares_between(checksq, ksq) | checkers;
+  target = between_bb(checksq, ksq) | checkers;
 
   mlist = (us == WHITE ? generate_pawn_moves<WHITE, MV_EVASION>(pos, mlist, target)
                        : generate_pawn_moves<BLACK, MV_EVASION>(pos, mlist, target));

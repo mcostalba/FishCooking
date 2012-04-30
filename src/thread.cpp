@@ -313,7 +313,7 @@ Value ThreadsManager::split(Position& pos, Stack* ss, Value alpha, Value beta,
       return bestValue;
 
   // Pick the next available split point from the split point stack
-  SplitPoint* sp = &master->splitPoints[master->splitPointsCnt++];
+  SplitPoint* sp = &master->splitPoints[master->splitPointsCnt];
 
   sp->parent = master->curSplitPoint;
   sp->master = master;
@@ -356,6 +356,8 @@ Value ThreadsManager::split(Position& pos, Stack* ss, Value alpha, Value beta,
           if (++slavesCnt + 1 >= maxThreadsPerSplitPoint) // Master is always included
               break;
       }
+
+  master->splitPointsCnt++;
 
   lock_release(splitLock);
   lock_release(sp->lock);

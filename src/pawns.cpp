@@ -152,8 +152,8 @@ Score PawnTable::evaluate_pawns(const Position& pos, Bitboard ourPawns,
       // chain (but not the backward one).
       chain    =   ourPawns   & adjacent_files_bb(f) & b;
       isolated = !(ourPawns   & adjacent_files_bb(f));
-      doubled  =   ourPawns   & squares_in_front_of(Us, s);
-      opposed  =   theirPawns & squares_in_front_of(Us, s);
+      doubled  =   ourPawns   & forward_bb(Us, s);
+      opposed  =   theirPawns & forward_bb(Us, s);
       passed   = !(theirPawns & passed_pawn_mask(Us, s));
 
       // Test for backward pawn
@@ -260,6 +260,7 @@ template<Color Us>
 Score PawnEntry::update_safety(const Position& pos, Square ksq) {
 
   kingSquares[Us] = ksq;
+  castleRights[Us] = pos.can_castle(Us);
 
   if (relative_rank(Us, ksq) > RANK_4)
       return kingSafety[Us] = SCORE_ZERO;

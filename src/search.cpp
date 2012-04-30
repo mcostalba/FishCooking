@@ -176,11 +176,11 @@ namespace {
     }
 
     // Test for a capture that triggers a pawn endgame
-    if (   captureOrPromotion
-        && type_of(pos.piece_on(to_sq(m))) != PAWN
+    if (    captureOrPromotion
+        &&  type_of(pos.piece_on(to_sq(m))) != PAWN
+        && !is_special(m)
         && (  pos.non_pawn_material(WHITE) + pos.non_pawn_material(BLACK)
-            - PieceValueMidgame[pos.piece_on(to_sq(m))] == VALUE_ZERO)
-        && !is_special(m))
+            - PieceValueMidgame[pos.piece_on(to_sq(m))] == VALUE_ZERO))
         return true;
 
     return false;
@@ -622,10 +622,10 @@ namespace {
         TT.refresh(tte);
         ss->currentMove = ttMove; // Can be MOVE_NONE
 
-        if (   ttValue >= beta
-            && ttMove
+        if (    ttValue >= beta
+            &&  ttMove
             && !pos.is_capture_or_promotion(ttMove)
-            && ttMove != ss->killers[0])
+            &&  ttMove != ss->killers[0])
         {
             ss->killers[1] = ss->killers[0];
             ss->killers[0] = ttMove;
@@ -652,9 +652,9 @@ namespace {
 
     // Update gain for the parent non-capture move given the static position
     // evaluation before and after the move.
-    if (   (move = (ss-1)->currentMove) != MOVE_NULL
-        && (ss-1)->eval != VALUE_NONE
-        && ss->eval != VALUE_NONE
+    if (    (move = (ss-1)->currentMove) != MOVE_NULL
+        &&  (ss-1)->eval != VALUE_NONE
+        &&  ss->eval != VALUE_NONE
         && !pos.captured_piece_type()
         && !is_special(move))
     {
@@ -806,15 +806,15 @@ split_point_start: // At split points actual search starts from here
     futilityBase = ss->eval + ss->evalMargin;
     singularExtensionNode =   !RootNode
                            && !SpNode
-                           && depth >= SingularExtensionDepth[PvNode]
-                           && ttMove != MOVE_NONE
+                           &&  depth >= SingularExtensionDepth[PvNode]
+                           &&  ttMove != MOVE_NONE
                            && !excludedMove // Recursive singular search is not allowed
                            && (tte->type() & BOUND_LOWER)
-                           && tte->depth() >= depth - 3 * ONE_PLY;
+                           &&  tte->depth() >= depth - 3 * ONE_PLY;
 
     // Step 11. Loop through moves
     // Loop through all pseudo-legal moves until no moves remain or a beta cutoff occurs
-    while (   bestValue < beta
+    while (    bestValue < beta
            && (move = mp.next_move()) != MOVE_NONE
            && !thisThread->cutoff_occurred()
            && !Signals.stop)
@@ -863,17 +863,17 @@ split_point_start: // At split points actual search starts from here
           ext = ONE_PLY;
 
       else if (givesCheck && pos.see_sign(move) >= 0)
-          ext = PvNode ? ONE_PLY : ONE_PLY / 2;
+          ext = ONE_PLY / 2;
 
       // Singular extension search. If all moves but one fail low on a search of
       // (alpha-s, beta-s), and just one fails high on (alpha, beta), then that move
       // is singular and should be extended. To verify this we do a reduced search
       // on all the other moves but the ttMove, if result is lower than ttValue minus
       // a margin then we extend ttMove.
-      if (   singularExtensionNode
+      if (    singularExtensionNode
           && !ext
-          && move == ttMove
-          && pos.pl_move_is_legal(move, ci.pinned))
+          &&  move == ttMove
+          &&  pos.pl_move_is_legal(move, ci.pinned))
       {
           if (abs(ttValue) < VALUE_KNOWN_WIN)
           {
@@ -952,7 +952,7 @@ split_point_start: // At split points actual search starts from here
 
       // Step 15. Reduced depth search (LMR). If the move fails high will be
       // re-searched at full depth.
-      if (   depth > 3 * ONE_PLY
+      if (    depth > 3 * ONE_PLY
           && !isPvMove
           && !captureOrPromotion
           && !dangerous
@@ -1051,9 +1051,10 @@ split_point_start: // At split points actual search starts from here
 
       // Step 19. Check for split
       if (   !SpNode
-          && depth >= Threads.min_split_depth()
-          && bestValue < beta
-          && Threads.available_slave_exists(thisThread)
+          &&  depth >= Threads.min_split_depth()
+          &&  depth - reduction<PvNode>(depth, moveCount) >= Threads.min_split_depth()
+          &&  bestValue < beta
+          &&  Threads.available_slave_exists(thisThread)
           && !Signals.stop
           && !thisThread->cutoff_occurred())
           bestValue = Threads.split<FakeSplit>(pos, ss, alpha, beta, bestValue, &bestMove,
@@ -1245,8 +1246,8 @@ split_point_start: // At split points actual search starts from here
 
       // Detect non-capture evasions that are candidate to be pruned
       evasionPrunable =   !PvNode
-                       && inCheck
-                       && bestValue > VALUE_MATED_IN_MAX_PLY
+                       &&  inCheck
+                       &&  bestValue > VALUE_MATED_IN_MAX_PLY
                        && !pos.is_capture(move)
                        && !pos.can_castle(pos.side_to_move());
 
@@ -1337,7 +1338,7 @@ split_point_start: // At split points actual search starts from here
     // Rule 1. Checks which give opponent's king at most one escape square are dangerous
     b = kingAtt & ~pos.pieces(them) & ~newAtt & ~(1ULL << to);
 
-    if (single_bit(b)) // Catches also !b
+    if (!more_than_one(b))
         return true;
 
     // Rule 2. Queen contact check is very dangerous
@@ -1386,7 +1387,7 @@ split_point_start: // At split points actual search starts from here
 
     // Case 3: Moving through the vacated square
     p2 = pos.piece_on(f2);
-    if (piece_is_slider(p2) && (squares_between(f2, t2) & f1))
+    if (piece_is_slider(p2) && (between_bb(f2, t2) & f1))
       return true;
 
     // Case 4: The destination square for m2 is defended by the moving piece in m1
@@ -1397,7 +1398,7 @@ split_point_start: // At split points actual search starts from here
     // Case 5: Discovered check, checking piece is the piece moved in m1
     ksq = pos.king_square(pos.side_to_move());
     if (    piece_is_slider(p1)
-        && (squares_between(t1, ksq) & f2)
+        && (between_bb(t1, ksq) & f2)
         && (pos.attacks_from(p1, t1, pos.pieces() ^ f2) & ksq))
         return true;
 
@@ -1469,7 +1470,7 @@ split_point_start: // At split points actual search starts from here
     // Case 3: If the moving piece in the threatened move is a slider, don't
     // prune safe moves which block its ray.
     if (    piece_is_slider(pos.piece_on(tfrom))
-        && (squares_between(tfrom, tto) & mto)
+        && (between_bb(tfrom, tto) & mto)
         &&  pos.see_sign(m) >= 0)
         return true;
 
@@ -1849,8 +1850,8 @@ void Thread::idle_loop(SplitPoint* sp_master) {
 
           // Wake up master thread so to allow it to return from the idle loop in
           // case we are the last slave of the split point.
-          if (   Threads.use_sleeping_threads()
-              && this != sp->master
+          if (    Threads.use_sleeping_threads()
+              &&  this != sp->master
               && !sp->master->is_searching)
               sp->master->wake_up();
 

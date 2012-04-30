@@ -106,13 +106,13 @@ public:
   Piece piece_on(Square s) const;
   Square king_square(Color c) const;
   Square ep_square() const;
-  bool square_empty(Square s) const;
+  bool is_empty(Square s) const;
   const Square* piece_list(Color c, PieceType pt) const;
   int piece_count(Color c, PieceType pt) const;
 
   // Castling
-  bool can_castle(CastleRight f) const;
-  bool can_castle(Color c) const;
+  int can_castle(CastleRight f) const;
+  int can_castle(Color c) const;
   bool castle_impeded(Color c, CastlingSide s) const;
   Square castle_rook_square(Color c, CastlingSide s) const;
 
@@ -249,7 +249,7 @@ inline Piece Position::piece_moved(Move m) const {
   return board[from_sq(m)];
 }
 
-inline bool Position::square_empty(Square s) const {
+inline bool Position::is_empty(Square s) const {
   return board[s] == NO_PIECE;
 }
 
@@ -297,11 +297,11 @@ inline Square Position::king_square(Color c) const {
   return pieceList[c][KING][0];
 }
 
-inline bool Position::can_castle(CastleRight f) const {
+inline int Position::can_castle(CastleRight f) const {
   return st->castleRights & f;
 }
 
-inline bool Position::can_castle(Color c) const {
+inline int Position::can_castle(Color c) const {
   return st->castleRights & ((WHITE_OO | WHITE_OOO) << c);
 }
 
@@ -416,14 +416,14 @@ inline bool Position::is_chess960() const {
 inline bool Position::is_capture_or_promotion(Move m) const {
 
   assert(is_ok(m));
-  return is_special(m) ? !is_castle(m) : !square_empty(to_sq(m));
+  return is_special(m) ? !is_castle(m) : !is_empty(to_sq(m));
 }
 
 inline bool Position::is_capture(Move m) const {
 
   // Note that castle is coded as "king captures the rook"
   assert(is_ok(m));
-  return (!square_empty(to_sq(m)) && !is_castle(m)) || is_enpassant(m);
+  return (!is_empty(to_sq(m)) && !is_castle(m)) || is_enpassant(m);
 }
 
 inline PieceType Position::captured_piece_type() const {

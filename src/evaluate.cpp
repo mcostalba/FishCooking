@@ -581,7 +581,7 @@ Value do_evaluate(const Position& pos, Value& margin) {
 
             assert(b);
 
-            if (single_bit(b) && (b & pos.pieces(Them)))
+            if (!more_than_one(b) && (b & pos.pieces(Them)))
                 score += ThreatBonus[Piece][type_of(pos.piece_on(first_1(b)))];
         }
 
@@ -614,7 +614,7 @@ Value do_evaluate(const Position& pos, Value& margin) {
                 Square d = pawn_push(Us) + (file_of(s) == FILE_A ? DELTA_E : DELTA_W);
                 if (pos.piece_on(s + d) == make_piece(Us, PAWN))
                 {
-                    if (!pos.square_empty(s + d + pawn_push(Us)))
+                    if (!pos.is_empty(s + d + pawn_push(Us)))
                         score -= 2*TrappedBishopA1H1Penalty;
                     else if (pos.piece_on(s + 2*d) == make_piece(Us, PAWN))
                         score -= TrappedBishopA1H1Penalty;
@@ -689,8 +689,8 @@ Value do_evaluate(const Position& pos, Value& margin) {
                       & ~ei.attackedBy[Them][0];
 
     if (undefendedMinors)
-        score += single_bit(undefendedMinors) ? UndefendedMinorPenalty
-                                              : UndefendedMinorPenalty * 2;
+        score += more_than_one(undefendedMinors) ? UndefendedMinorPenalty * 2
+                                                 : UndefendedMinorPenalty;
 
     // Enemy pieces not defended by a pawn and under our attack
     weakEnemies =  pos.pieces(Them)
@@ -775,7 +775,7 @@ Value do_evaluate(const Position& pos, Value& margin) {
         attackUnits =  std::min(25, (ei.kingAttackersCount[Them] * ei.kingAttackersWeight[Them]) / 2)
                      + 3 * (ei.kingAdjacentZoneAttacksCount[Them] + popcount<Max15>(undefended))
                      + InitKingDanger[relative_square(Us, ksq)]
-                     - mg_value(ei.pi->king_safety<Us>(pos, ksq)) / 32;
+                     - mg_value(score) / 32;
 
         // Analyse enemy's safe queen contact checks. First find undefended
         // squares around the king attacked by enemy queen...
@@ -894,16 +894,16 @@ Value do_evaluate(const Position& pos, Value& margin) {
                 ebonus -= Value(square_distance(pos.king_square(Us), blockSq + pawn_push(Us)) * rr);
 
             // If the pawn is free to advance, increase bonus
-            if (pos.square_empty(blockSq))
+            if (pos.is_empty(blockSq))
             {
-                squaresToQueen = squares_in_front_of(Us, s);
+                squaresToQueen = forward_bb(Us, s);
                 defendedSquares = squaresToQueen & ei.attackedBy[Us][0];
 
                 // If there is an enemy rook or queen attacking the pawn from behind,
                 // add all X-ray attacks by the rook or queen. Otherwise consider only
                 // the squares in the pawn's path attacked or occupied by the enemy.
-                if (   (squares_in_front_of(Them, s) & pos.pieces(ROOK, QUEEN, Them))
-                    && (squares_in_front_of(Them, s) & pos.pieces(ROOK, QUEEN, Them) & pos.attacks_from<ROOK>(s)))
+                if (   (forward_bb(Them, s) & pos.pieces(ROOK, QUEEN, Them))
+                    && (forward_bb(Them, s) & pos.pieces(ROOK, QUEEN, Them) & pos.attacks_from<ROOK>(s)))
                     unsafeSquares = squaresToQueen;
                 else
                     unsafeSquares = squaresToQueen & (ei.attackedBy[Them][0] | pos.pieces(Them));
@@ -978,7 +978,7 @@ Value do_evaluate(const Position& pos, Value& margin) {
         {
             s = pop_1st_bit(&b);
             queeningSquare = relative_square(c, make_square(file_of(s), RANK_8));
-            queeningPath = squares_in_front_of(c, s);
+            queeningPath = forward_bb(c, s);
 
             // Compute plies to queening and check direct advancement
             movesToGo = rank_distance(s, queeningSquare) - int(relative_rank(c, s) == RANK_2);
@@ -1026,7 +1026,7 @@ Value do_evaluate(const Position& pos, Value& margin) {
 
         // Check if (without even considering any obstacles) we're too far away or doubled
         if (   pliesToQueen[winnerSide] + 3 <= pliesToGo
-            || (squares_in_front_of(loserSide, s) & pos.pieces(PAWN, loserSide)))
+            || (forward_bb(loserSide, s) & pos.pieces(PAWN, loserSide)))
             candidates ^= s;
     }
 
@@ -1050,7 +1050,7 @@ Value do_evaluate(const Position& pos, Value& margin) {
 
         // Generate list of blocking pawns and supporters
         supporters = adjacent_files_bb(file_of(s)) & candidates;
-        opposed = squares_in_front_of(loserSide, s) & pos.pieces(PAWN, winnerSide);
+        opposed = forward_bb(loserSide, s) & pos.pieces(PAWN, winnerSide);
         blockers = passed_pawn_mask(loserSide, s) & pos.pieces(PAWN, winnerSide);
 
         assert(blockers);

@@ -542,6 +542,7 @@ namespace {
     Value refinedValue, nullValue, futilityBase, futilityValue;
     bool isPvMove, inCheck, singularExtensionNode, givesCheck;
     bool captureOrPromotion, dangerous, doFullDepthSearch;
+	bool skipNull = false;
     int moveCount = 0, playedMoveCount = 0;
     Thread* thisThread = pos.this_thread();
     SplitPoint* sp = NULL;
@@ -643,7 +644,9 @@ namespace {
         ss->eval = tte->static_value();
         ss->evalMargin = tte->static_value_margin();
         refinedValue = refine_eval(tte, ttValue, ss->eval);
-    }
+
+		skipNull = (tte->type() & BOUND_UPPER) && ttValue < beta;
+	}
     else
     {
         refinedValue = ss->eval = evaluate(pos, ss->evalMargin);
@@ -696,6 +699,7 @@ namespace {
         && !ss->skipNullMove
         &&  depth > ONE_PLY
         && !inCheck
+		&& !skipNull
         &&  refinedValue >= beta
         &&  abs(beta) < VALUE_MATE_IN_MAX_PLY
         &&  pos.non_pawn_material(pos.side_to_move()))

@@ -512,9 +512,9 @@ namespace {
     }
   }
 
-  bool safeNull(const Position &pos) {
-	  return pos.non_pawn_material(pos.side_to_move())
-         && !pos.all_check_blockers();
+  bool safeNull(const Position &pos, Depth depth) {
+		return pos.non_pawn_material(pos.side_to_move())
+         && (depth < RazorDepth || !pos.all_check_blockers());
   }
 
   // search<>() is the main search function for both PV and non-PV nodes and for
@@ -692,7 +692,7 @@ namespace {
         && !inCheck
         &&  refinedValue - futility_margin(depth, 0) >= beta
         &&  abs(beta) < VALUE_MATE_IN_MAX_PLY
-        &&  safeNull(pos))
+        &&  safeNull(pos, depth))
         return refinedValue - futility_margin(depth, 0);
 
     // Step 8. Null move search with verification search (is omitted in PV nodes)
@@ -702,7 +702,7 @@ namespace {
         && !inCheck
         &&  refinedValue >= beta
         &&  abs(beta) < VALUE_MATE_IN_MAX_PLY
-        &&  safeNull(pos))
+        &&  safeNull(pos, depth))
     {
         ss->currentMove = MOVE_NULL;
 

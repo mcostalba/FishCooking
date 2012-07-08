@@ -918,6 +918,9 @@ Value do_evaluate(const Position& pos, Value& margin) {
                     // If yes, big bonus (but smaller than when there are no enemy attacks),
                     // if no, somewhat smaller bonus.
                     ebonus += Value(rr * ((unsafeSquares & defendedSquares) == unsafeSquares ? 13 : 8));
+
+                if (adjacent_files_bb(file_of(s)) & pos.pieces(Us, ROOK, QUEEN))
+                    ebonus += Value(rr * 3);
             }
         } // rr != 0
 

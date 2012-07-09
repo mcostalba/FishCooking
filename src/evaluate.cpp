@@ -920,7 +920,7 @@ Value do_evaluate(const Position& pos, Value& margin) {
                     ebonus += Value(rr * ((unsafeSquares & defendedSquares) == unsafeSquares ? 13 : 8));
 
                 if (this_and_adjacent_files_bb(file_of(s)) & in_front_bb(Them, s) & pos.pieces(Us, ROOK, QUEEN))
-                    ebonus += Value(rr * 3);
+                    ebonus += Value(rr);
             }
         } // rr != 0
 

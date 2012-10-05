@@ -20,11 +20,18 @@
 ### Section 1. General Configuration
 ### ==========================================================================
 
+### Establish the operating system name
+UNAME = $(shell uname)
+
 ### Executable name
 EXE = stockfish
 
 ### Installation dir definitions
 PREFIX = /usr/local
+# Haiku has a non-standard filesystem layout
+ifeq ($(UNAME),Haiku)
+	PREFIX=/boot/common
+endif
 BINDIR = $(PREFIX)/bin
 
 ### Built-in benchmark for pgo-builds
@@ -32,7 +39,7 @@ PGOBENCH = ./$(EXE) bench 32 1 10 default depth
 
 ### Object files
 OBJS = benchmark.o bitbase.o bitboard.o book.o endgame.o evaluate.o main.o \
-	material.o misc.o move.o movegen.o movepick.o pawns.o position.o \
+	material.o misc.o movegen.o movepick.o notation.o pawns.o position.o \
 	search.o thread.o timeman.o tt.o uci.o ucioption.o
 
 ### ==========================================================================
@@ -192,6 +199,15 @@ ifeq ($(COMP),icc)
 	profile_clean = icc-profile-clean
 endif
 
+ifeq ($(COMP),clang)
+	comp=clang
+	CXX=clang++
+	profile_prepare = gcc-profile-prepare
+	profile_make = gcc-profile-make
+	profile_use = gcc-profile-use
+	profile_clean = gcc-profile-clean
+endif
+
 ### 3.2 General compiler settings
 CXXFLAGS = -g -Wall -Wcast-qual -fno-exceptions -fno-rtti $(EXTRACXXFLAGS)
 
@@ -207,6 +223,10 @@ ifeq ($(comp),icc)
 	CXXFLAGS += -wd383,981,1418,1419,10187,10188,11505,11503 -Wcheck -Wabi -Wdeprecated -strict-ansi
 endif
 
+ifeq ($(comp),clang)
+	CXXFLAGS += -ansi -pedantic -Wno-long-long -Wextra -Wshadow
+endif
+
 ifeq ($(os),osx)
 	CXXFLAGS += -arch $(arch)
 endif
@@ -216,7 +236,10 @@ LDFLAGS = $(EXTRALDFLAGS)
 
 ### On mingw use Windows threads, otherwise POSIX
 ifneq ($(comp),mingw)
-	LDFLAGS += -lpthread
+	# Haiku has pthreads in its libroot, so only link it in on other platforms
+	ifneq ($(UNAME),Haiku)
+		LDFLAGS += -lpthread
+	endif
 endif
 
 ifeq ($(os),osx)
@@ -255,6 +278,20 @@ ifeq ($(optimize),yes)
 			CXXFLAGS += -O3
 		endif
 	endif
+
+	ifeq ($(comp),clang)
+		### -O4 requires a linker that supports LLVM's LTO
+		CXXFLAGS += -O3
+
+		ifeq ($(os),osx)
+			ifeq ($(arch),i386)
+				CXXFLAGS += -mdynamic-no-pic
+			endif
+			ifeq ($(arch),x86_64)
+				CXXFLAGS += -mdynamic-no-pic
+			endif
+		endif
+	endif
 endif
 
 ### 3.6. Bits
@@ -284,11 +321,13 @@ endif
 ### This is a mix of compile and link time options because the lto link phase
 ### needs access to the optimization flags.
 ifeq ($(comp),gcc)
-	GCC_MAJOR := `$(CXX) -dumpversion | cut -f1 -d.`
-	GCC_MINOR := `$(CXX) -dumpversion | cut -f2 -d.`
-	ifeq (1,$(shell expr \( $(GCC_MAJOR) \> 4 \) \| \( $(GCC_MAJOR) \= 4 \& $(GCC_MINOR) \>= 5 \)))
-		CXXFLAGS += -flto
-		LDFLAGS += $(CXXFLAGS)
+	ifeq ($(optimize),yes)
+		GCC_MAJOR := `$(CXX) -dumpversion | cut -f1 -d.`
+		GCC_MINOR := `$(CXX) -dumpversion | cut -f2 -d.`
+		ifeq (1,$(shell expr \( $(GCC_MAJOR) \> 4 \) \| \( $(GCC_MAJOR) \= 4 \& $(GCC_MINOR) \>= 5 \)))
+			CXXFLAGS += -flto
+			LDFLAGS += $(CXXFLAGS)
+		endif
 	endif
 endif
 
@@ -329,6 +368,7 @@ help:
 	@echo "gcc                  > Gnu compiler (default)"
 	@echo "icc                  > Intel compiler"
 	@echo "mingw                > Gnu compiler with MinGW under Windows"
+	@echo "clang                > LLVM Clang compiler"
 	@echo ""
 	@echo "Non-standard targets:"
 	@echo ""
@@ -415,7 +455,7 @@ config-sanity:
 	@test "$(prefetch)" = "yes" || test "$(prefetch)" = "no"
 	@test "$(bsfq)" = "yes" || test "$(bsfq)" = "no"
 	@test "$(popcnt)" = "yes" || test "$(popcnt)" = "no"
-	@test "$(comp)" = "gcc" || test "$(comp)" = "icc" || test "$(comp)" = "mingw"
+	@test "$(comp)" = "gcc" || test "$(comp)" = "icc" || test "$(comp)" = "mingw" || test "$(comp)" = "clang"
 
 $(EXE): $(OBJS)
 	$(CXX) -o $@ $(OBJS) $(LDFLAGS)

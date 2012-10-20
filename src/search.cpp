@@ -480,8 +480,8 @@ namespace {
   }
 
   bool safeNull(const Position &pos, Depth depth) {
-		return pos.non_pawn_material(pos.side_to_move())
-         && (depth < RazorDepth || !pos.all_check_blockers());
+      return pos.non_pawn_material(pos.side_to_move())
+         && !pos.all_check_blockers();
   }
 
   // search<>() is the main search function for both PV and non-PV nodes and for

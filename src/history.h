@@ -54,13 +54,15 @@ inline void History::clear() {
 }
 
 inline Value History::value(Piece p, Square to) const {
-  return history[p][to];
+  return Value(history[p][to] >> 2);
 }
 
 inline void History::add(Piece p, Square to, Value bonus) {
-  history[p][to] = Value(((history[p][to] * 31) >> 5) + (bonus >> 2));
-  if (abs(history[p][to]) > MaxValue)
-    history[p][to] /= 2;
+  history[p][to] = Value(((history[p][to] * 31) >> 5) + bonus);
+  /*if (history[p][to] > MaxValue)
+    history[p][to] = MaxValue;
+  else if (history[p][to] < -MaxValue)
+    history[p][to] = -MaxValue;*/
 }
 
 inline Value History::gain(Piece p, Square to) const {

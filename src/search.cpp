@@ -623,8 +623,10 @@ namespace {
                  ss->staticEval, ss->evalMargin);
     }
 
-    LogStat("\nS %d %d %d %d %d %d %d ", beta, depth, inCheck, allNode, (ss-1)->currentMove == MOVE_NULL,
-      ss->staticEval, ss->evalMargin);
+    char common_log[512];
+    snprintf(common_log, sizeof(common_log), "S %d %d %d %d %d %d %d",
+             beta, depth, inCheck, allNode, (ss-1)->currentMove == MOVE_NULL,
+             ss->staticEval, ss->evalMargin);
 
     // Update gain for the parent non-capture move given the static position
     // evaluation before and after the move.
@@ -652,7 +654,7 @@ namespace {
         if (v < rbeta) {
             // Logically we should return (v + razor_margin(depth)), but
             // surprisingly this did slightly weaker in tests.
-            LogStat("R %d", v);
+            LogStat("%s R %d\n", common_log, v);
             return v;
         }
     }
@@ -667,7 +669,7 @@ namespace {
         &&  eval - FutilityMargins[depth][0] >= beta
         &&  abs(beta) < VALUE_MATE_IN_MAX_PLY
         &&  pos.non_pawn_material(pos.side_to_move())) {
-        LogStat("S");
+        LogStat("%s S\n", common_log);
         return eval - FutilityMargins[depth][0];
     }
 
@@ -698,14 +700,12 @@ namespace {
 
         if (nullValue >= beta)
         {
-            LogStat("N %d ", nullValue);
-
             // Do not return unproven mate scores
             if (nullValue >= VALUE_MATE_IN_MAX_PLY)
                 nullValue = beta;
 
             if (depth < 6 * ONE_PLY) {
-                LogStat("L\n");
+                LogStat("%s L %d\n", common_log, nullValue);
                 return nullValue;
             }
 
@@ -715,7 +715,7 @@ namespace {
             ss->skipNullMove = false;
 
             if (v >= beta) {
-                LogStat("V");
+                LogStat("%s V %d\n", common_log, nullValue);
                 return nullValue;
             }
         }
@@ -754,7 +754,7 @@ namespace {
                 value = -search<NonPV>(pos, ss+1, -rbeta, -rbeta+1, rdepth, true);
                 pos.undo_move(move);
                 if (value >= rbeta) {
-                    LogStat("P %d", value);
+                    LogStat("%s P %d\n", common_log, value);
                     return value;
                 }
             }
@@ -865,7 +865,7 @@ split_point_start: // At split points actual search starts from here
           ss->excludedMove = MOVE_NONE;
 
           if (value < rBeta) {
-              LogStat("E %d", value);
+              LogStat("%s E %d\n", common_log, value);
               ext = ONE_PLY;
           }
       }
@@ -1077,7 +1077,7 @@ split_point_start: // At split points actual search starts from here
 
     if (bestValue >= beta) // Failed high
     {
-        LogStat("C %d %d", playedMoveCount, bestValue);
+        LogStat("%s C %d %d\n", common_log, playedMoveCount, bestValue);
 
         TT.store(posKey, value_to_tt(bestValue, ss->ply), BOUND_LOWER, depth,
                  bestMove, ss->staticEval, ss->evalMargin);
@@ -1103,7 +1103,7 @@ split_point_start: // At split points actual search starts from here
         }
     }
     else { // Failed low or PV search
-        LogStat("N %d %d", playedMoveCount, bestValue);
+        LogStat("%s N %d %d\n", common_log, playedMoveCount, bestValue);
         TT.store(posKey, value_to_tt(bestValue, ss->ply),
                  PvNode && bestMove != MOVE_NONE ? BOUND_EXACT : BOUND_UPPER,
                  depth, bestMove, ss->staticEval, ss->evalMargin);

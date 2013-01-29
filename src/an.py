@@ -34,14 +34,7 @@ def filter_depth(stats):
     results[s[S_DEPTH]].append(s)
   return results
 
-def main():
-  stats = parse_stats()
-  d = filter_depth(stats)
-  for k,v in d.iteritems():
-    print k, len(v)
-
-  return
-
+def filter_all_cut(stats):
   all = []
   cut = []
   for s in stats:
@@ -49,8 +42,29 @@ def main():
       all.append(s)
     else:
       cut.append(s) 
+  return (all, cut)
 
-  print len(all), len(cut)
+def avg_movecount(stats):
+  result = 0
+  cnt = 0
+  for s in stats:
+    e = s[S_EXIT_TYPE]
+    if e == 'C' or e == 'N':
+      result += s[S_EXTRA2]
+      cnt += 1
+  if cnt > 0:
+    return result / cnt
+  return 0
+
+def main():
+  stats = parse_stats()
+  d = filter_depth(stats)
+  for k,v in d.iteritems():
+    print k
+    all, cut = filter_all_cut(v)
+    print 'all: %d %d cut: %d %d' % (len(all), avg_movecount(all), len(cut), avg_movecount(cut))
+
+  return
 
 if __name__ == '__main__':
   main()

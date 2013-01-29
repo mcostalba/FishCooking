@@ -471,27 +471,6 @@ namespace {
     }
   }
 
-  #pragma pack(push, 1)
-  struct LogStatInfo {
-    int beta;
-    char depth;
-    char flags;
-    int eval;
-    int evalMargin;
-    int extra1;
-    char extra2;
-    char exitType;
-  };
-  #pragma pack(pop)
-
-  static void LogStat(const LogStatInfo & info) {
-    static FILE* log_file = 0;
-    if (!log_file) {
-      log_file = fopen("stats", "w");
-    }
-    fwrite(&info, sizeof(LogStatInfo), 1, log_file);
-  }
-
   // search<>() is the main search function for both PV and non-PV nodes and for
   // normal and SplitPoint nodes. When called just after a split point the search
   // is simpler because we have already probed the hash table, done a null move
@@ -630,16 +609,6 @@ namespace {
                  ss->staticEval, ss->evalMargin);
     }
 
-    LogStatInfo logStatInfo;
-    logStatInfo.beta = beta;
-    logStatInfo.depth = depth;
-    logStatInfo.flags = inCheck ? 1 : 0;
-    logStatInfo.flags |= allNode ? 2 : 0;
-    logStatInfo.flags |= (ss-1)->currentMove == MOVE_NULL ? 4 : 0;
-    logStatInfo.eval = ss->staticEval;
-    logStatInfo.evalMargin = ss->evalMargin;
-    logStatInfo.exitType = logStatInfo.extra1 = logStatInfo.extra2 = 0;
-
     // Update gain for the parent non-capture move given the static position
     // evaluation before and after the move.
     if (   (move = (ss-1)->currentMove) != MOVE_NULL
@@ -666,9 +635,6 @@ namespace {
         if (v < rbeta) {
             // Logically we should return (v + razor_margin(depth)), but
             // surprisingly this did slightly weaker in tests.
-            logStatInfo.exitType = 'R';
-            logStatInfo.extra1 = v;
-            LogStat(logStatInfo);
             return v;
         }
     }
@@ -683,8 +649,6 @@ namespace {
         &&  eval - FutilityMargins[depth][0] >= beta
         &&  abs(beta) < VALUE_MATE_IN_MAX_PLY
         &&  pos.non_pawn_material(pos.side_to_move())) {
-        logStatInfo.exitType = 'S';
-        LogStat(logStatInfo);
         return eval - FutilityMargins[depth][0];
     }
 
@@ -720,9 +684,6 @@ namespace {
                 nullValue = beta;
 
             if (depth < 6 * ONE_PLY) {
-                logStatInfo.exitType = 'L';
-                logStatInfo.extra1 = nullValue;
-                LogStat(logStatInfo);
                 return nullValue;
             }
 
@@ -732,9 +693,6 @@ namespace {
             ss->skipNullMove = false;
 
             if (v >= beta) {
-                logStatInfo.exitType = 'V';
-                logStatInfo.extra1 = nullValue;
-                LogStat(logStatInfo);
                 return nullValue;
             }
         }
@@ -773,9 +731,6 @@ namespace {
                 value = -search<NonPV>(pos, ss+1, -rbeta, -rbeta+1, rdepth, true);
                 pos.undo_move(move);
                 if (value >= rbeta) {
-                    logStatInfo.exitType = 'P';
-                    logStatInfo.extra1 = value;
-                    LogStat(logStatInfo);
                     return value;
                 }
             }
@@ -886,9 +841,6 @@ split_point_start: // At split points actual search starts from here
           ss->excludedMove = MOVE_NONE;
 
           if (value < rBeta) {
-              logStatInfo.exitType = 'E';
-              logStatInfo.extra1 = value;
-              LogStat(logStatInfo);
               ext = ONE_PLY;
           }
       }
@@ -1100,11 +1052,6 @@ split_point_start: // At split points actual search starts from here
 
     if (bestValue >= beta) // Failed high
     {
-        logStatInfo.exitType = 'C';
-        logStatInfo.extra1 = bestValue;
-        logStatInfo.extra2 = playedMoveCount;
-        LogStat(logStatInfo);
-
         TT.store(posKey, value_to_tt(bestValue, ss->ply), BOUND_LOWER, depth,
                  bestMove, ss->staticEval, ss->evalMargin);
 
@@ -1129,10 +1076,6 @@ split_point_start: // At split points actual search starts from here
         }
     }
     else { // Failed low or PV search
-        logStatInfo.exitType = 'N';
-        logStatInfo.extra1 = bestValue;
-        logStatInfo.extra2 = playedMoveCount;
-        LogStat(logStatInfo);
         TT.store(posKey, value_to_tt(bestValue, ss->ply),
                  PvNode && bestMove != MOVE_NONE ? BOUND_EXACT : BOUND_UPPER,
                  depth, bestMove, ss->staticEval, ss->evalMargin);

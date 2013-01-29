@@ -154,7 +154,8 @@ public:
   void do_move(Move m, StateInfo& st);
   void do_move(Move m, StateInfo& st, const CheckInfo& ci, bool moveIsCheck);
   void undo_move(Move m);
-  template<bool Do> void do_null_move(StateInfo& st);
+  void do_null_move(StateInfo& st);
+  void undo_null_move();
 
   // Static exchange evaluation
   int see(Move m) const;
@@ -190,8 +191,8 @@ private:
   void put_piece(Piece p, Square s);
   void set_castle_right(Color c, Square rfrom);
 
-  // Helper template functions
-  template<bool Do> void do_castle_move(Move m);
+  // Helper functions
+  void do_castle(Square kfrom, Square kto, Square rfrom, Square rto);
   template<bool FindPinned> Bitboard hidden_checkers() const;
 
   // Computing hash keys from scratch (for initialization and debugging)

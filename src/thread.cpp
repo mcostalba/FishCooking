@@ -17,6 +17,7 @@
   along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+#include <algorithm> // For std::count
 #include <cassert>
 #include <iostream>
 
@@ -146,7 +147,7 @@ void Thread::wait_for(volatile const bool& b) {
 
 bool Thread::cutoff_occurred() const {
 
-  for (SplitPoint* sp = activeSplitPoint; sp; sp = sp->parent)
+  for (SplitPoint* sp = activeSplitPoint; sp; sp = sp->parentSplitPoint)
       if (sp->cutoff)
           return true;
 
@@ -257,17 +258,17 @@ Value ThreadPool::split(Position& pos, Stack* ss, Value alpha, Value beta,
   assert(bestValue > -VALUE_INFINITE);
   assert(depth >= Threads.minimumSplitDepth);
 
-  Thread* master = pos.this_thread();
+  Thread* thisThread = pos.this_thread();
 
-  assert(master->searching);
-  assert(master->splitPointsSize < MAX_SPLITPOINTS_PER_THREAD);
+  assert(thisThread->searching);
+  assert(thisThread->splitPointsSize < MAX_SPLITPOINTS_PER_THREAD);
 
   // Pick the next available split point from the split point stack
-  SplitPoint& sp = master->splitPoints[master->splitPointsSize];
+  SplitPoint& sp = thisThread->splitPoints[thisThread->splitPointsSize];
 
-  sp.master = master;
-  sp.parent = master->activeSplitPoint;
-  sp.slavesMask = 1ULL << master->idx;
+  sp.masterThread = thisThread;
+  sp.parentSplitPoint = thisThread->activeSplitPoint;
+  sp.slavesMask = 1ULL << thisThread->idx;
   sp.depth = depth;
   sp.bestMove = *bestMove;
   sp.threatMove = threatMove;
@@ -275,7 +276,7 @@ Value ThreadPool::split(Position& pos, Stack* ss, Value alpha, Value beta,
   sp.beta = beta;
   sp.nodeType = nodeType;
   sp.bestValue = bestValue;
-  sp.mp = &mp;
+  sp.movePicker = &mp;
   sp.moveCount = moveCount;
   sp.pos = &pos;
   sp.nodes = 0;
@@ -288,13 +289,13 @@ Value ThreadPool::split(Position& pos, Stack* ss, Value alpha, Value beta,
   mutex.lock();
   sp.mutex.lock();
 
-  master->splitPointsSize++;
-  master->activeSplitPoint = &sp;
+  thisThread->splitPointsSize++;
+  thisThread->activeSplitPoint = &sp;
 
   size_t slavesCnt = 1; // Master is always included
 
   for (size_t i = 0; i < threads.size() && !Fake; ++i)
-      if (threads[i]->is_available_to(master) && ++slavesCnt <= maxThreadsPerSplitPoint)
+      if (threads[i]->is_available_to(thisThread) && ++slavesCnt <= maxThreadsPerSplitPoint)
       {
           sp.slavesMask |= 1ULL << threads[i]->idx;
           threads[i]->activeSplitPoint = &sp;
@@ -311,11 +312,11 @@ Value ThreadPool::split(Position& pos, Stack* ss, Value alpha, Value beta,
   // their work at this split point.
   if (slavesCnt > 1 || Fake)
   {
-      master->Thread::idle_loop(); // Force a call to base class idle_loop()
+      thisThread->Thread::idle_loop(); // Force a call to base class idle_loop()
 
       // In helpful master concept a master can help only a sub-tree of its split
       // point, and because here is all finished is not possible master is booked.
-      assert(!master->searching);
+      assert(!thisThread->searching);
   }
 
   // We have returned from the idle loop, which means that all threads are
@@ -324,9 +325,9 @@ Value ThreadPool::split(Position& pos, Stack* ss, Value alpha, Value beta,
   mutex.lock();
   sp.mutex.lock();
 
-  master->searching = true;
-  master->splitPointsSize--;
-  master->activeSplitPoint = sp.parent;
+  thisThread->searching = true;
+  thisThread->splitPointsSize--;
+  thisThread->activeSplitPoint = sp.parentSplitPoint;
   pos.set_nodes_searched(pos.nodes_searched() + sp.nodes);
   *bestMove = sp.bestMove;
 
@@ -370,7 +371,8 @@ void ThreadPool::start_thinking(const Position& pos, const LimitsType& limits,
   RootMoves.clear();
 
   for (MoveList<LEGAL> ml(pos); !ml.end(); ++ml)
-      if (searchMoves.empty() || count(searchMoves.begin(), searchMoves.end(), ml.move()))
+      if (   searchMoves.empty()
+          || std::count(searchMoves.begin(), searchMoves.end(), ml.move()))
           RootMoves.push_back(RootMove(ml.move()));
 
   main_thread()->thinking = true;

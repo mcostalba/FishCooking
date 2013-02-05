@@ -1031,7 +1031,7 @@ split_point_start: // At split points actual search starts from here
           assert(bestValue < beta);
 
           thisThread->split<FakeSplit>(pos, ss, alpha, beta, &bestValue, &bestMove,
-                                       depth, threatMove, moveCount, &mp, NT);
+                                       depth, threatMove, moveCount, &mp, NT, allNode);
           if (bestValue >= beta)
               break;
       }
@@ -1684,8 +1684,7 @@ void Thread::idle_loop() {
               search<SplitPointPV>(pos, ss+1, sp->alpha, sp->beta, sp->depth, true);
               break;
           case NonPV:
-              // TODO(glinscott): Hack - need allNode in sp
-              search<SplitPointNonPV>(pos, ss+1, sp->alpha, sp->beta, sp->depth, true);
+              search<SplitPointNonPV>(pos, ss+1, sp->alpha, sp->beta, sp->depth, sp->allNode);
               break;
           default:
               assert(false);

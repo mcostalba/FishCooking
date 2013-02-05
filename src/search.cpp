@@ -21,8 +21,6 @@
 #include <cassert>
 #include <cmath>
 #include <cstring>
-#include <cstdio>
-#include <cstdarg>
 #include <iostream>
 #include <sstream>
 
@@ -474,6 +472,7 @@ namespace {
     }
   }
 
+
   // search<>() is the main search function for both PV and non-PV nodes and for
   // normal and SplitPoint nodes. When called just after a split point the search
   // is simpler because we have already probed the hash table, done a null move
@@ -635,11 +634,10 @@ namespace {
     {
         Value rbeta = beta - razor_margin(depth);
         Value v = qsearch<NonPV, false>(pos, ss, rbeta-1, rbeta, DEPTH_ZERO);
-        if (v < rbeta) {
+        if (v < rbeta)
             // Logically we should return (v + razor_margin(depth)), but
             // surprisingly this did slightly weaker in tests.
             return v;
-        }
     }
 
     // Step 7. Static null move pruning (is omitted in PV nodes)
@@ -651,9 +649,8 @@ namespace {
         && !inCheck
         &&  eval - FutilityMargins[depth][0] >= beta
         &&  abs(beta) < VALUE_MATE_IN_MAX_PLY
-        &&  pos.non_pawn_material(pos.side_to_move())) {
+        &&  pos.non_pawn_material(pos.side_to_move()))
         return eval - FutilityMargins[depth][0];
-    }
 
     // Step 8. Null move search with verification search (is omitted in PV nodes)
     if (   !PvNode
@@ -686,18 +683,16 @@ namespace {
             if (nullValue >= VALUE_MATE_IN_MAX_PLY)
                 nullValue = beta;
 
-            if (depth < 6 * ONE_PLY) {
+            if (depth < 6 * ONE_PLY)
                 return nullValue;
-            }
 
             // Do verification search at high depths
             ss->skipNullMove = true;
             Value v = search<NonPV>(pos, ss, alpha, beta, depth-R, allNode);
             ss->skipNullMove = false;
 
-            if (v >= beta) {
+            if (v >= beta)
                 return nullValue;
-            }
         }
         else
         {
@@ -745,9 +740,8 @@ namespace {
                 pos.do_move(move, st, ci, pos.move_gives_check(move, ci));
                 value = -search<NonPV>(pos, ss+1, -rbeta, -rbeta+1, rdepth, true);
                 pos.undo_move(move);
-                if (value >= rbeta) {
+                if (value >= rbeta)
                     return value;
-                }
             }
     }
 
@@ -855,9 +849,8 @@ split_point_start: // At split points actual search starts from here
           ss->skipNullMove = false;
           ss->excludedMove = MOVE_NONE;
 
-          if (value < rBeta) {
+          if (value < rBeta)
               ext = ONE_PLY;
-          }
       }
 
       // Update current move (this must be done after singular extension search)
@@ -1021,7 +1014,6 @@ split_point_start: // At split points actual search starts from here
               {
                   assert(value >= beta); // Fail high
 
-
                   if (SpNode)
                       sp->cutoff = true;
 
@@ -1092,11 +1084,10 @@ split_point_start: // At split points actual search starts from here
             }
         }
     }
-    else { // Failed low or PV search
+    else // Failed low or PV search
         TT.store(posKey, value_to_tt(bestValue, ss->ply),
                  PvNode && bestMove != MOVE_NONE ? BOUND_EXACT : BOUND_UPPER,
                  depth, bestMove, ss->staticEval, ss->evalMargin);
-    }
 
     assert(bestValue > -VALUE_INFINITE && bestValue < VALUE_INFINITE);
 

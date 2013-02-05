@@ -777,7 +777,6 @@ split_point_start: // At split points actual search starts from here
                            && !allNode
                            &&  ttMove != MOVE_NONE
                            && !excludedMove // Recursive singular search is not allowed
-                           && (tte->type() & BOUND_LOWER)
                            &&  tte->depth() >= depth - 3 * ONE_PLY;
 
     // Step 11. Loop through moves
@@ -849,7 +848,7 @@ split_point_start: // At split points actual search starts from here
       {
           assert(ttValue != VALUE_NONE);
 
-          Value rBeta = ttValue - int(depth) * 6 / 4;
+          Value rBeta = ttValue - int(depth) / 2;
           ss->excludedMove = move;
           ss->skipNullMove = true;
           value = search<NonPV>(pos, ss, rBeta - 1, rBeta, depth / 2, true);

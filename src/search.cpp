@@ -842,7 +842,7 @@ split_point_start: // At split points actual search starts from here
       {
           assert(ttValue != VALUE_NONE);
 
-          Value rBeta = ttValue - int(depth) / 2;
+          Value rBeta = ttValue - (int(depth) / 2 + ((int(depth) / 8) * 16));
           ss->excludedMove = move;
           ss->skipNullMove = true;
           value = search<NonPV>(pos, ss, rBeta - 1, rBeta, depth / 2, true);

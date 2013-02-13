@@ -48,7 +48,7 @@ typedef unsigned __int64 uint64_t;
 typedef timeval sys_time_t;
 
 inline void system_time(sys_time_t* t) { gettimeofday(t, NULL); }
-inline uint64_t time_to_msec(const sys_time_t& t) { return t.tv_sec * 1000LL + t.tv_usec / 1000; }
+inline int64_t time_to_msec(const sys_time_t& t) { return t.tv_sec * 1000LL + t.tv_usec / 1000; }
 
 #  include <pthread.h>
 typedef pthread_mutex_t Lock;
@@ -74,7 +74,7 @@ typedef void*(*pt_start_fn)(void*);
 typedef _timeb sys_time_t;
 
 inline void system_time(sys_time_t* t) { _ftime(t); }
-inline uint64_t time_to_msec(const sys_time_t& t) { return t.time * 1000LL + t.millitm; }
+inline int64_t time_to_msec(const sys_time_t& t) { return t.time * 1000LL + t.millitm; }
 
 #if !defined(NOMINMAX)
 #  define NOMINMAX // disable macros min() and max()
@@ -92,6 +92,9 @@ typedef CRITICAL_SECTION Lock;
 typedef HANDLE WaitCondition;
 typedef HANDLE NativeHandle;
 
+// On Windows 95 and 98 parameter lpThreadId my not be null
+inline DWORD* dwWin9xKludge() { static DWORD dw; return &dw; }
+
 #  define lock_init(x) InitializeCriticalSection(&(x))
 #  define lock_grab(x) EnterCriticalSection(&(x))
 #  define lock_release(x) LeaveCriticalSection(&(x))
@@ -101,7 +104,7 @@ typedef HANDLE NativeHandle;
 #  define cond_signal(x) SetEvent(x)
 #  define cond_wait(x,y) { lock_release(y); WaitForSingleObject(x, INFINITE); lock_grab(y); }
 #  define cond_timedwait(x,y,z) { lock_release(y); WaitForSingleObject(x,z); lock_grab(y); }
-#  define thread_create(x,f,t) (x = CreateThread(NULL,0,(LPTHREAD_START_ROUTINE)f,t,0,NULL), x != NULL)
+#  define thread_create(x,f,t) (x = CreateThread(NULL,0,(LPTHREAD_START_ROUTINE)f,t,0,dwWin9xKludge()), x != NULL)
 #  define thread_join(x) { WaitForSingleObject(x, INFINITE); CloseHandle(x); }
 
 #endif

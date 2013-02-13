@@ -22,9 +22,11 @@
 #include <string>
 
 #include "evaluate.h"
+#include "notation.h"
 #include "position.h"
 #include "search.h"
 #include "thread.h"
+#include "tt.h"
 #include "ucioption.h"
 
 using namespace std;
@@ -37,13 +39,12 @@ namespace {
   const char* StartFEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
 
   // Keep track of position keys along the setup moves (from start position to the
-  // position just before to start searching). This is needed by draw detection
-  // where, due to 50 moves rule, we need to check at most 100 plies back.
-  StateInfo StateRingBuf[102], *SetupState = StateRingBuf;
+  // position just before to start searching). Needed by repetition draw detection.
+  Search::StateStackPtr SetupStates;
 
   void set_option(istringstream& up);
   void set_position(Position& pos, istringstream& up);
-  void go(Position& pos, istringstream& up);
+  void go(const Position& pos, istringstream& up);
 }
 
 
@@ -52,81 +53,35 @@ namespace {
 /// that we exit gracefully if the GUI dies unexpectedly. In addition to the UCI
 /// commands, the function also supports a few debug commands.
 
-void uci_loop(const string& args) {
+void UCI::loop(const string& args) {
 
   Position pos(StartFEN, false, Threads.main_thread()); // The root position
-  string cmd, token;
+  string token, cmd = args;
 
-  while (token != "quit")
-  {
-      if (!args.empty())
-          cmd = args;
-
-      else if (!getline(cin, cmd)) // Block here waiting for input
+  do {
+      if (args.empty() && !getline(cin, cmd)) // Block here waiting for input
           cmd = "quit";
 
       istringstream is(cmd);
 
       is >> skipws >> token;
 
-      if (token == "quit" || token == "stop")
+      if (token == "quit" || token == "stop" || token == "ponderhit")
       {
-          Search::Signals.stop = true;
-          Threads.wait_for_search_finished(); // Cannot quit while threads are running
-      }
-
-      else if (token == "ponderhit")
-      {
-          // The opponent has played the expected move. GUI sends "ponderhit" if
-          // we were told to ponder on the same move the opponent has played. We
-          // should continue searching but switching from pondering to normal search.
-          Search::Limits.ponder = false;
-
-          if (Search::Signals.stopOnPonderhit)
+          // GUI sends 'ponderhit' to tell us to ponder on the same move the
+          // opponent has played. In case Signals.stopOnPonderhit is set we are
+          // waiting for 'ponderhit' to stop the search (for instance because we
+          // already ran out of time), otherwise we should continue searching but
+          // switching from pondering to normal search.
+          if (token != "ponderhit" || Search::Signals.stopOnPonderhit)
           {
               Search::Signals.stop = true;
-              Threads.main_thread()->wake_up(); // Could be sleeping
+              Threads.main_thread()->notify_one(); // Could be sleeping
           }
+          else
+              Search::Limits.ponder = false;
       }
-
-      else if (token == "go")
-          go(pos, is);
-
-      else if (token == "ucinewgame")
-      { /* Avoid returning "Unknown command" */ }
-
-      else if (token == "isready")
-          cout << "readyok" << endl;
-
-      else if (token == "position")
-          set_position(pos, is);
-
-      else if (token == "setoption")
-          set_option(is);
-
-      else if (token == "d")
-          pos.print();
-
-      else if (token == "flip")
-          pos.flip();
-
-      else if (token == "eval")
-          cout << Eval::trace(pos) << endl;
-
-      else if (token == "bench")
-          benchmark(pos, is);
-
-      else if (token == "key")
-          cout << "key: " << hex     << pos.key()
-               << "\nmaterial key: " << pos.material_key()
-               << "\npawn key: "     << pos.pawn_key() << endl;
-
-      else if (token == "uci")
-          cout << "id name "     << engine_info(true)
-               << "\n"           << Options
-               << "\nuciok"      << endl;
-
-      else if (token == "perft" && (is >> token)) // Read depth
+      else if (token == "perft" && (is >> token)) // Read perft depth
       {
           stringstream ss;
 
@@ -135,25 +90,39 @@ void uci_loop(const string& args) {
 
           benchmark(pos, ss);
       }
+      else if (token == "key") sync_cout <<   "position key: " << hex << pos.key()
+                                         << "\nmaterial key: " << pos.material_key()
+                                         << "\npawn key:     " << pos.pawn_key()
+                                         << sync_endl;
 
+      else if (token == "uci") sync_cout << "id name " << engine_info(true)
+                                         << "\n"       << Options
+                                         << "\nuciok"  << sync_endl;
+
+      else if (token == "ucinewgame") TT.clear();
+      else if (token == "go")         go(pos, is);
+      else if (token == "position")   set_position(pos, is);
+      else if (token == "setoption")  set_option(is);
+      else if (token == "flip")       pos.flip();
+      else if (token == "bench")      benchmark(pos, is);
+      else if (token == "d")          sync_cout << pos.pretty() << sync_endl;
+      else if (token == "isready")    sync_cout << "readyok" << sync_endl;
+      else if (token == "eval")       sync_cout << Eval::trace(pos) << sync_endl;
       else
-          cout << "Unknown command: " << cmd << endl;
+          sync_cout << "Unknown command: " << cmd << sync_endl;
 
-      if (!args.empty()) // Command line arguments have one-shot behaviour
-      {
-          Threads.wait_for_search_finished();
-          break;
-      }
-  }
+  } while (token != "quit" && args.empty()); // Args have one-shot behaviour
+
+  Threads.wait_for_think_finished(); // Cannot quit while search is running
 }
 
 
 namespace {
 
-  // set_position() is called when engine receives the "position" UCI
-  // command. The function sets up the position described in the given
-  // fen string ("fen") or the starting position ("startpos") and then
-  // makes the moves given in the following move list ("moves").
+  // set_position() is called when engine receives the "position" UCI command.
+  // The function sets up the position described in the given fen string ("fen")
+  // or the starting position ("startpos") and then makes the moves given in the
+  // following move list ("moves").
 
   void set_position(Position& pos, istringstream& is) {
 
@@ -173,16 +142,14 @@ namespace {
     else
         return;
 
-    pos.from_fen(fen, Options["UCI_Chess960"], Threads.main_thread());
+    pos.set(fen, Options["UCI_Chess960"], Threads.main_thread());
+    SetupStates = Search::StateStackPtr(new std::stack<StateInfo>());
 
     // Parse move list (if any)
     while (is >> token && (m = move_from_uci(pos, token)) != MOVE_NONE)
     {
-        pos.do_move(m, *SetupState);
-
-        // Increment pointer to StateRingBuf circular buffer
-        if (++SetupState - StateRingBuf >= 102)
-            SetupState = StateRingBuf;
+        SetupStates->push(StateInfo());
+        pos.do_move(m, SetupStates->top());
     }
   }
 
@@ -207,15 +174,15 @@ namespace {
     if (Options.count(name))
         Options[name] = value;
     else
-        cout << "No such option: " << name << endl;
+        sync_cout << "No such option: " << name << sync_endl;
   }
 
 
   // go() is called when engine receives the "go" UCI command. The function sets
-  // the thinking time and other parameters from the input string, and then starts
+  // the thinking time and other parameters from the input string, and starts
   // the search.
 
-  void go(Position& pos, istringstream& is) {
+  void go(const Position& pos, istringstream& is) {
 
     Search::LimitsType limits;
     vector<Move> searchMoves;
@@ -223,31 +190,23 @@ namespace {
 
     while (is >> token)
     {
-        if (token == "wtime")
-            is >> limits.time[WHITE];
-        else if (token == "btime")
-            is >> limits.time[BLACK];
-        else if (token == "winc")
-            is >> limits.inc[WHITE];
-        else if (token == "binc")
-            is >> limits.inc[BLACK];
-        else if (token == "movestogo")
-            is >> limits.movestogo;
-        else if (token == "depth")
-            is >> limits.depth;
-        else if (token == "nodes")
-            is >> limits.nodes;
-        else if (token == "movetime")
-            is >> limits.movetime;
-        else if (token == "infinite")
-            limits.infinite = true;
-        else if (token == "ponder")
-            limits.ponder = true;
-        else if (token == "searchmoves")
+        if (token == "searchmoves")
             while (is >> token)
                 searchMoves.push_back(move_from_uci(pos, token));
+
+        else if (token == "wtime")     is >> limits.time[WHITE];
+        else if (token == "btime")     is >> limits.time[BLACK];
+        else if (token == "winc")      is >> limits.inc[WHITE];
+        else if (token == "binc")      is >> limits.inc[BLACK];
+        else if (token == "movestogo") is >> limits.movestogo;
+        else if (token == "depth")     is >> limits.depth;
+        else if (token == "nodes")     is >> limits.nodes;
+        else if (token == "movetime")  is >> limits.movetime;
+        else if (token == "mate")      is >> limits.mate;
+        else if (token == "infinite")  limits.infinite = true;
+        else if (token == "ponder")    limits.ponder = true;
     }
 
-    Threads.start_searching(pos, limits, searchMoves);
+    Threads.start_thinking(pos, limits, searchMoves, SetupStates);
   }
 }

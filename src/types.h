@@ -35,12 +35,14 @@
 ///               | only in 64-bit mode. For compiling requires hardware with
 ///               | popcnt support.
 
+#include <cassert>
+#include <cctype>
 #include <climits>
 #include <cstdlib>
 
 #include "platform.h"
 
-#if defined(_WIN64)
+#if defined(_WIN64) && !defined(IS_64BIT)
 #  include <intrin.h> // MSVC popcnt and bsfq instrinsics
 #  define IS_64BIT
 #  define USE_BSFQ
@@ -49,6 +51,10 @@
 #if defined(USE_POPCNT) && defined(_MSC_VER) && defined(__INTEL_COMPILER)
 #  include <nmmintrin.h> // Intel header for _mm_popcnt_u64() intrinsic
 #endif
+
+#  if !defined(NO_PREFETCH) && (defined(__INTEL_COMPILER) || defined(_MSC_VER))
+#   include <xmmintrin.h> // Intel and Microsoft header for _mm_prefetch()
+#  endif
 
 #if defined(_MSC_VER) || defined(__INTEL_COMPILER)
 #  define CACHE_LINE_ALIGNMENT __declspec(align(64))
@@ -118,27 +124,33 @@ enum Move {
   MOVE_NULL = 65
 };
 
-struct MoveStack {
-  Move move;
-  int score;
+enum MoveType {
+  NORMAL    = 0,
+  PROMOTION = 1 << 14,
+  ENPASSANT = 2 << 14,
+  CASTLE    = 3 << 14
 };
 
-inline bool operator<(const MoveStack& f, const MoveStack& s) {
-  return f.score < s.score;
-}
-
-enum CastleRight {
+enum CastleRight {  // Defined as in PolyGlot book hash key
   CASTLES_NONE = 0,
   WHITE_OO     = 1,
-  BLACK_OO     = 2,
-  WHITE_OOO    = 4,
+  WHITE_OOO    = 2,
+  BLACK_OO     = 4,
   BLACK_OOO    = 8,
-  ALL_CASTLES  = 15
+  ALL_CASTLES  = 15,
+  CASTLE_RIGHT_NB = 16
 };
 
 enum CastlingSide {
   KING_SIDE,
-  QUEEN_SIDE
+  QUEEN_SIDE,
+  CASTLING_SIDE_NB = 2
+};
+
+enum Phase {
+  PHASE_ENDGAME = 0,
+  PHASE_MIDGAME = 128,
+  MG = 0, EG = 1, PHASE_NB = 2
 };
 
 enum ScaleFactor {
@@ -167,22 +179,30 @@ enum Value {
   VALUE_MATED_IN_MAX_PLY = -VALUE_MATE + MAX_PLY,
 
   VALUE_ENSURE_INTEGER_SIZE_P = INT_MAX,
-  VALUE_ENSURE_INTEGER_SIZE_N = INT_MIN
+  VALUE_ENSURE_INTEGER_SIZE_N = INT_MIN,
+
+  PawnValueMg   = 198,   PawnValueEg   = 258,
+  KnightValueMg = 817,   KnightValueEg = 846,
+  BishopValueMg = 836,   BishopValueEg = 857,
+  RookValueMg   = 1270,  RookValueEg   = 1278,
+  QueenValueMg  = 2521,  QueenValueEg  = 2558
 };
 
 enum PieceType {
   NO_PIECE_TYPE = 0, ALL_PIECES = 0,
-  PAWN = 1, KNIGHT = 2, BISHOP = 3, ROOK = 4, QUEEN = 5, KING = 6
+  PAWN = 1, KNIGHT = 2, BISHOP = 3, ROOK = 4, QUEEN = 5, KING = 6,
+  PIECE_TYPE_NB = 8
 };
 
 enum Piece {
-  NO_PIECE = 16, // color_of(NO_PIECE) == NO_COLOR
+  NO_PIECE = 0,
   W_PAWN = 1, W_KNIGHT =  2, W_BISHOP =  3, W_ROOK =  4, W_QUEEN =  5, W_KING =  6,
-  B_PAWN = 9, B_KNIGHT = 10, B_BISHOP = 11, B_ROOK = 12, B_QUEEN = 13, B_KING = 14
+  B_PAWN = 9, B_KNIGHT = 10, B_BISHOP = 11, B_ROOK = 12, B_QUEEN = 13, B_KING = 14,
+  PIECE_NB = 16
 };
 
 enum Color {
-  WHITE, BLACK, NO_COLOR
+  WHITE, BLACK, NO_COLOR, COLOR_NB = 2
 };
 
 enum Depth {
@@ -208,6 +228,8 @@ enum Square {
   SQ_A8, SQ_B8, SQ_C8, SQ_D8, SQ_E8, SQ_F8, SQ_G8, SQ_H8,
   SQ_NONE,
 
+  SQUARE_NB = 64,
+
   DELTA_N =  8,
   DELTA_E =  1,
   DELTA_S = -8,
@@ -222,11 +244,11 @@ enum Square {
 };
 
 enum File {
-  FILE_A, FILE_B, FILE_C, FILE_D, FILE_E, FILE_F, FILE_G, FILE_H
+  FILE_A, FILE_B, FILE_C, FILE_D, FILE_E, FILE_F, FILE_G, FILE_H, FILE_NB = 8
 };
 
 enum Rank {
-  RANK_1, RANK_2, RANK_3, RANK_4, RANK_5, RANK_6, RANK_7, RANK_8
+  RANK_1, RANK_2, RANK_3, RANK_4, RANK_5, RANK_6, RANK_7, RANK_8, RANK_NB = 8
 };
 
 
@@ -311,20 +333,31 @@ inline Score apply_weight(Score v, Score w) {
 #undef ENABLE_OPERATORS_ON
 #undef ENABLE_SAFE_OPERATORS_ON
 
-const Value PawnValueMidgame   = Value(198);
-const Value PawnValueEndgame   = Value(258);
-const Value KnightValueMidgame = Value(817);
-const Value KnightValueEndgame = Value(846);
-const Value BishopValueMidgame = Value(836);
-const Value BishopValueEndgame = Value(857);
-const Value RookValueMidgame   = Value(1270);
-const Value RookValueEndgame   = Value(1278);
-const Value QueenValueMidgame  = Value(2521);
-const Value QueenValueEndgame  = Value(2558);
+namespace Zobrist {
 
-extern const Value PieceValueMidgame[17]; // Indexed by Piece or PieceType
-extern const Value PieceValueEndgame[17];
-extern int SquareDistance[64][64];
+  extern Key psq[COLOR_NB][PIECE_TYPE_NB][SQUARE_NB];
+  extern Key enpassant[FILE_NB];
+  extern Key castle[CASTLE_RIGHT_NB];
+  extern Key side;
+  extern Key exclusion;
+
+  void init();
+}
+
+CACHE_LINE_ALIGNMENT
+
+extern Score pieceSquareTable[PIECE_NB][SQUARE_NB];
+extern Value PieceValue[PHASE_NB][PIECE_NB];
+extern int SquareDistance[SQUARE_NB][SQUARE_NB];
+
+struct MoveStack {
+  Move move;
+  int score;
+};
+
+inline bool operator<(const MoveStack& f, const MoveStack& s) {
+  return f.score < s.score;
+}
 
 inline Color operator~(Color c) {
   return Color(c ^ 1);
@@ -332,6 +365,10 @@ inline Color operator~(Color c) {
 
 inline Square operator~(Square s) {
   return Square(s ^ 56); // Vertical flip SQ_A1 -> SQ_A8
+}
+
+inline Square operator|(File f, Rank r) {
+  return Square((r << 3) | f);
 }
 
 inline Value mate_in(int ply) {
@@ -347,7 +384,7 @@ inline Piece make_piece(Color c, PieceType pt) {
 }
 
 inline CastleRight make_castle_right(Color c, CastlingSide s) {
-  return CastleRight((s == KING_SIDE ? WHITE_OO : WHITE_OOO) << c);
+  return CastleRight(WHITE_OO << ((s == QUEEN_SIDE) + 2 * c));
 }
 
 inline PieceType type_of(Piece p)  {
@@ -355,11 +392,8 @@ inline PieceType type_of(Piece p)  {
 }
 
 inline Color color_of(Piece p) {
+  assert(p != NO_PIECE);
   return Color(p >> 3);
-}
-
-inline Square make_square(File f, Rank r) {
-  return Square((r << 3) | f);
 }
 
 inline bool is_ok(Square s) {
@@ -391,7 +425,7 @@ inline Rank relative_rank(Color c, Square s) {
 }
 
 inline bool opposite_colors(Square s1, Square s2) {
-  int s = s1 ^ s2;
+  int s = int(s1) ^ int(s2);
   return ((s >> 3) ^ s) & 1;
 }
 
@@ -407,16 +441,12 @@ inline int square_distance(Square s1, Square s2) {
   return SquareDistance[s1][s2];
 }
 
-inline char piece_type_to_char(PieceType pt) {
-  return " PNBRQK"[pt];
-}
-
-inline char file_to_char(File f) {
-  return char(f - FILE_A + int('a'));
+inline char file_to_char(File f, bool tolower = true) {
+  return char(f - FILE_A + (tolower ? 'a' : 'A'));
 }
 
 inline char rank_to_char(Rank r) {
-  return char(r - RANK_1 + int('1'));
+  return char(r - RANK_1 + '1');
 }
 
 inline Square pawn_push(Color c) {
@@ -431,20 +461,8 @@ inline Square to_sq(Move m) {
   return Square(m & 0x3F);
 }
 
-inline bool is_special(Move m) {
-  return m & (3 << 14);
-}
-
-inline bool is_promotion(Move m) {
-  return (m & (3 << 14)) == (1 << 14);
-}
-
-inline int is_enpassant(Move m) {
-  return (m & (3 << 14)) == (2 << 14);
-}
-
-inline int is_castle(Move m) {
-  return (m & (3 << 14)) == (3 << 14);
+inline MoveType type_of(Move m) {
+  return MoveType(m & (3 << 14));
 }
 
 inline PieceType promotion_type(Move m) {
@@ -455,16 +473,9 @@ inline Move make_move(Square from, Square to) {
   return Move(to | (from << 6));
 }
 
-inline Move make_promotion(Square from, Square to, PieceType pt) {
-  return Move(to | (from << 6) | (1 << 14) | ((pt - 2) << 12)) ;
-}
-
-inline Move make_enpassant(Square from, Square to) {
-  return Move(to | (from << 6) | (2 << 14));
-}
-
-inline Move make_castle(Square from, Square to) {
-  return Move(to | (from << 6) | (3 << 14));
+template<MoveType T>
+inline Move make(Square from, Square to, PieceType pt = KNIGHT) {
+  return Move(to | (from << 6) | T | ((pt - KNIGHT) << 12));
 }
 
 inline bool is_ok(Move m) {
@@ -476,23 +487,6 @@ inline bool is_ok(Move m) {
 inline const std::string square_to_string(Square s) {
   char ch[] = { file_to_char(file_of(s)), rank_to_char(rank_of(s)), 0 };
   return ch;
-}
-
-/// Our insertion sort implementation, works with pointers and iterators and is
-/// guaranteed to be stable, as is needed.
-template<typename T, typename K>
-void sort(K first, K last)
-{
-  T tmp;
-  K p, q;
-
-  for (p = first + 1; p < last; p++)
-  {
-      tmp = *p;
-      for (q = p; q != first && *(q-1) < tmp; --q)
-          *q = *(q-1);
-      *q = tmp;
-  }
 }
 
 #endif // !defined(TYPES_H_INCLUDED)

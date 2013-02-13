@@ -20,11 +20,18 @@
 ### Section 1. General Configuration
 ### ==========================================================================
 
+### Establish the operating system name
+UNAME = $(shell uname)
+
 ### Executable name
 EXE = stockfish
 
 ### Installation dir definitions
 PREFIX = /usr/local
+# Haiku has a non-standard filesystem layout
+ifeq ($(UNAME),Haiku)
+	PREFIX=/boot/common
+endif
 BINDIR = $(PREFIX)/bin
 
 ### Built-in benchmark for pgo-builds
@@ -32,7 +39,7 @@ PGOBENCH = ./$(EXE) bench 32 1 10 default depth
 
 ### Object files
 OBJS = benchmark.o bitbase.o bitboard.o book.o endgame.o evaluate.o main.o \
-	material.o misc.o move.o movegen.o movepick.o pawns.o position.o \
+	material.o misc.o movegen.o movepick.o notation.o pawns.o position.o \
 	search.o thread.o timeman.o tt.o uci.o ucioption.o
 
 ### ==========================================================================
@@ -51,6 +58,7 @@ OBJS = benchmark.o bitbase.o bitboard.o book.o endgame.o evaluate.o main.o \
 # bsfq = yes/no       --- -DUSE_BSFQ       --- Use bsfq x86_64 asm-instruction (only
 #                                              with GCC and ICC 64-bit)
 # popcnt = yes/no     --- -DUSE_POPCNT     --- Use popcnt x86_64 asm-instruction
+# sse = yes/no        --- -msse            --- Use Intel Streaming SIMD Extensions
 #
 # Note that Makefile is space sensitive, so when adding new architectures
 # or modifying existing flags, you have to make sure there are no extra spaces
@@ -70,6 +78,7 @@ ifeq ($(ARCH),general-64)
 	prefetch = no
 	bsfq = no
 	popcnt = no
+	sse = no
 endif
 
 ifeq ($(ARCH),general-32)
@@ -79,6 +88,7 @@ ifeq ($(ARCH),general-32)
 	prefetch = no
 	bsfq = no
 	popcnt = no
+	sse = no
 endif
 
 # x86-section
@@ -89,6 +99,7 @@ ifeq ($(ARCH),x86-64)
 	prefetch = yes
 	bsfq = yes
 	popcnt = no
+	sse = yes
 endif
 
 ifeq ($(ARCH),x86-64-modern)
@@ -98,6 +109,7 @@ ifeq ($(ARCH),x86-64-modern)
 	prefetch = yes
 	bsfq = yes
 	popcnt = yes
+	sse = yes
 endif
 
 ifeq ($(ARCH),x86-32)
@@ -107,6 +119,7 @@ ifeq ($(ARCH),x86-32)
 	prefetch = yes
 	bsfq = no
 	popcnt = no
+	sse = yes
 endif
 
 ifeq ($(ARCH),x86-32-old)
@@ -116,6 +129,18 @@ ifeq ($(ARCH),x86-32-old)
 	prefetch = no
 	bsfq = no
 	popcnt = no
+	sse = no
+endif
+
+#arm section
+ifeq ($(ARCH),armv7)
+	arch = armv7
+	os = any
+	bits = 32
+	prefetch = yes
+	bsfq = yes
+	popcnt = no
+	sse = no
 endif
 
 # osx-section
@@ -126,6 +151,7 @@ ifeq ($(ARCH),osx-ppc-64)
 	prefetch = no
 	bsfq = no
 	popcnt = no
+	sse = no
 endif
 
 ifeq ($(ARCH),osx-ppc-32)
@@ -135,6 +161,7 @@ ifeq ($(ARCH),osx-ppc-32)
 	prefetch = no
 	bsfq = no
 	popcnt = no
+	sse = no
 endif
 
 ifeq ($(ARCH),osx-x86-64)
@@ -144,6 +171,7 @@ ifeq ($(ARCH),osx-x86-64)
 	prefetch = yes
 	bsfq = yes
 	popcnt = no
+	sse = yes
 endif
 
 ifeq ($(ARCH),osx-x86-32)
@@ -153,6 +181,7 @@ ifeq ($(ARCH),osx-x86-32)
 	prefetch = yes
 	bsfq = no
 	popcnt = no
+	sse = yes
 endif
 
 
@@ -192,6 +221,15 @@ ifeq ($(COMP),icc)
 	profile_clean = icc-profile-clean
 endif
 
+ifeq ($(COMP),clang)
+	comp=clang
+	CXX=clang++
+	profile_prepare = gcc-profile-prepare
+	profile_make = gcc-profile-make
+	profile_use = gcc-profile-use
+	profile_clean = gcc-profile-clean
+endif
+
 ### 3.2 General compiler settings
 CXXFLAGS = -g -Wall -Wcast-qual -fno-exceptions -fno-rtti $(EXTRACXXFLAGS)
 
@@ -204,11 +242,15 @@ ifeq ($(comp),mingw)
 endif
 
 ifeq ($(comp),icc)
-	CXXFLAGS += -wd383,981,1418,1419,10187,10188,11505,11503 -Wcheck -Wabi -Wdeprecated -strict-ansi
+	CXXFLAGS += -wd383,981,1418,1419,1476,10187,10188,11505,11503 -Wcheck -Wabi -Wdeprecated -strict-ansi
+endif
+
+ifeq ($(comp),clang)
+	CXXFLAGS += -ansi -pedantic -Wno-long-long -Wextra -Wshadow
 endif
 
 ifeq ($(os),osx)
-	CXXFLAGS += -arch $(arch)
+	CXXFLAGS += -arch $(arch) -mmacosx-version-min=10.0
 endif
 
 ### 3.3 General linker settings
@@ -216,11 +258,14 @@ LDFLAGS = $(EXTRALDFLAGS)
 
 ### On mingw use Windows threads, otherwise POSIX
 ifneq ($(comp),mingw)
-	LDFLAGS += -lpthread
+	# Haiku has pthreads in its libroot, so only link it in on other platforms
+	ifneq ($(UNAME),Haiku)
+		LDFLAGS += -lpthread
+	endif
 endif
 
 ifeq ($(os),osx)
-	LDFLAGS += -arch $(arch)
+	LDFLAGS += -arch $(arch) -mmacosx-version-min=10.0
 endif
 
 ### 3.4 Debugging
@@ -242,6 +287,10 @@ ifeq ($(optimize),yes)
 				CXXFLAGS += -mdynamic-no-pic
 			endif
 		endif
+
+		ifeq ($(arch),armv7)
+			CXXFLAGS += -fno-gcse
+		endif
 	endif
 
 	ifeq ($(comp),mingw)
@@ -255,6 +304,20 @@ ifeq ($(optimize),yes)
 			CXXFLAGS += -O3
 		endif
 	endif
+
+	ifeq ($(comp),clang)
+		### -O4 requires a linker that supports LLVM's LTO
+		CXXFLAGS += -O3
+
+		ifeq ($(os),osx)
+			ifeq ($(arch),i386)
+				CXXFLAGS += -mdynamic-no-pic
+			endif
+			ifeq ($(arch),x86_64)
+				CXXFLAGS += -mdynamic-no-pic
+			endif
+		endif
+	endif
 endif
 
 ### 3.6. Bits
@@ -264,8 +327,10 @@ endif
 
 ### 3.7 prefetch
 ifeq ($(prefetch),yes)
-	CXXFLAGS += -msse
-	DEPENDFLAGS += -msse
+	ifeq ($(sse),yes)
+		CXXFLAGS += -msse
+		DEPENDFLAGS += -msse
+	endif
 else
 	CXXFLAGS += -DNO_PREFETCH
 endif
@@ -284,11 +349,13 @@ endif
 ### This is a mix of compile and link time options because the lto link phase
 ### needs access to the optimization flags.
 ifeq ($(comp),gcc)
-	GCC_MAJOR := `$(CXX) -dumpversion | cut -f1 -d.`
-	GCC_MINOR := `$(CXX) -dumpversion | cut -f2 -d.`
-	ifeq (1,$(shell expr \( $(GCC_MAJOR) \> 4 \) \| \( $(GCC_MAJOR) \= 4 \& $(GCC_MINOR) \>= 5 \)))
-		CXXFLAGS += -flto
-		LDFLAGS += $(CXXFLAGS)
+	ifeq ($(optimize),yes)
+		GCC_MAJOR := `$(CXX) -dumpversion | cut -f1 -d.`
+		GCC_MINOR := `$(CXX) -dumpversion | cut -f2 -d.`
+		ifeq (1,$(shell expr \( $(GCC_MAJOR) \> 4 \) \| \( $(GCC_MAJOR) \= 4 \& $(GCC_MINOR) \>= 5 \)))
+			CXXFLAGS += -flto
+			LDFLAGS += $(CXXFLAGS)
+		endif
 	endif
 endif
 
@@ -321,6 +388,7 @@ help:
 	@echo "osx-ppc-32           > PPC-Mac OS X 32 bit"
 	@echo "osx-x86-64           > x86-Mac OS X 64 bit"
 	@echo "osx-x86-32           > x86-Mac OS X 32 bit"
+	@echo "armv7                > ARMv7 32 bit"
 	@echo "general-64           > unspecified 64-bit"
 	@echo "general-32           > unspecified 32-bit"
 	@echo ""
@@ -329,6 +397,7 @@ help:
 	@echo "gcc                  > Gnu compiler (default)"
 	@echo "icc                  > Intel compiler"
 	@echo "mingw                > Gnu compiler with MinGW under Windows"
+	@echo "clang                > LLVM Clang compiler"
 	@echo ""
 	@echo "Non-standard targets:"
 	@echo ""
@@ -398,6 +467,7 @@ config-sanity:
 	@echo "prefetch: '$(prefetch)'"
 	@echo "bsfq: '$(bsfq)'"
 	@echo "popcnt: '$(popcnt)'"
+	@echo "sse: '$(sse)'"
 	@echo ""
 	@echo "Flags:"
 	@echo "CXX: $(CXX)"
@@ -409,13 +479,14 @@ config-sanity:
 	@test "$(debug)" = "yes" || test "$(debug)" = "no"
 	@test "$(optimize)" = "yes" || test "$(optimize)" = "no"
 	@test "$(arch)" = "any" || test "$(arch)" = "x86_64" || test "$(arch)" = "i386" || \
-	 test "$(arch)" = "ppc64" || test "$(arch)" = "ppc"
+	 test "$(arch)" = "ppc64" || test "$(arch)" = "ppc" || test "$(arch)" = "armv7"
 	@test "$(os)" = "any" || test "$(os)" = "osx"
 	@test "$(bits)" = "32" || test "$(bits)" = "64"
 	@test "$(prefetch)" = "yes" || test "$(prefetch)" = "no"
 	@test "$(bsfq)" = "yes" || test "$(bsfq)" = "no"
 	@test "$(popcnt)" = "yes" || test "$(popcnt)" = "no"
-	@test "$(comp)" = "gcc" || test "$(comp)" = "icc" || test "$(comp)" = "mingw"
+	@test "$(sse)" = "yes" || test "$(sse)" = "no"
+	@test "$(comp)" = "gcc" || test "$(comp)" = "icc" || test "$(comp)" = "mingw" || test "$(comp)" = "clang"
 
 $(EXE): $(OBJS)
 	$(CXX) -o $@ $(OBJS) $(LDFLAGS)

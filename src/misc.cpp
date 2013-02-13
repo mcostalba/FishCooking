@@ -68,6 +68,13 @@ const string engine_info(bool to_uci) {
 }
 
 
+/// Convert system time to milliseconds. That's all we need.
+
+Time::point Time::now() {
+  sys_time_t t; system_time(&t); return time_to_msec(t);
+}
+
+
 /// Debug functions used mainly to collect run-time statistics
 
 static uint64_t hits[2], means[2];
@@ -94,33 +101,33 @@ void dbg_print() {
 /// usual i/o functionality and without changing a single line of code!
 /// Idea from http://groups.google.com/group/comp.lang.c++/msg/1d941c0f26ea0d81
 
+struct Tie: public streambuf { // MSVC requires splitted streambuf for cin and cout
+
+  Tie(streambuf* b, ofstream* f) : buf(b), file(f) {}
+
+  int sync() { return file->rdbuf()->pubsync(), buf->pubsync(); }
+  int overflow(int c) { return log(buf->sputc((char)c), "<< "); }
+  int underflow() { return buf->sgetc(); }
+  int uflow() { return log(buf->sbumpc(), ">> "); }
+
+  streambuf* buf;
+  ofstream* file;
+
+  int log(int c, const char* prefix) {
+
+    static int last = '\n';
+
+    if (last == '\n')
+        file->rdbuf()->sputn(prefix, 3);
+
+    return last = file->rdbuf()->sputc((char)c);
+  }
+};
+
 class Logger {
 
-  Logger() : in(cin.rdbuf(), file), out(cout.rdbuf(), file) {}
-  ~Logger() { start(false); }
-
-  struct Tie: public streambuf { // MSVC requires splitted streambuf for cin and cout
-
-    Tie(streambuf* b, ofstream& f) : buf(b), file(f) {}
-
-    int sync() { return file.rdbuf()->pubsync(), buf->pubsync(); }
-    int overflow(int c) { return log(buf->sputc((char)c), "<< "); }
-    int underflow() { return buf->sgetc(); }
-    int uflow() { return log(buf->sbumpc(), ">> "); }
-
-    int log(int c, const char* prefix) {
-
-      static int last = '\n';
-
-      if (last == '\n')
-          file.rdbuf()->sputn(prefix, 3);
-
-      return last = file.rdbuf()->sputc((char)c);
-    }
-
-    streambuf* buf;
-    ofstream& file;
-  };
+  Logger() : in(cin.rdbuf(), &file), out(cout.rdbuf(), &file) {}
+ ~Logger() { start(false); }
 
   ofstream file;
   Tie in, out;
@@ -144,6 +151,23 @@ public:
     }
   }
 };
+
+
+/// Used to serialize access to std::cout to avoid multiple threads to write at
+/// the same time.
+
+std::ostream& operator<<(std::ostream& os, SyncCout sc) {
+
+  static Mutex m;
+
+  if (sc == io_lock)
+      m.lock();
+
+  if (sc == io_unlock)
+      m.unlock();
+
+  return os;
+}
 
 
 /// Trampoline helper to avoid moving Logger to misc.h
@@ -184,7 +208,7 @@ void timed_wait(WaitCondition& sleepCond, Lock& sleepLock, int msec) {
   int tm = msec;
 #else
   timespec ts, *tm = &ts;
-  uint64_t ms = Time::current_time().msec() + msec;
+  uint64_t ms = Time::now() + msec;
 
   ts.tv_sec = ms / 1000;
   ts.tv_nsec = (ms % 1000) * 1000000LL;
@@ -203,18 +227,21 @@ void prefetch(char*) {}
 
 #else
 
-#   include <xmmintrin.h>
-
 void prefetch(char* addr) {
 
-#  if defined(__INTEL_COMPILER) || defined(__ICL)
+#  if defined(__INTEL_COMPILER)
    // This hack prevents prefetches to be optimized away by
    // Intel compiler. Both MSVC and gcc seems not affected.
    __asm__ ("");
 #  endif
 
-  _mm_prefetch(addr, _MM_HINT_T2);
-  _mm_prefetch(addr+64, _MM_HINT_T2); // 64 bytes ahead
+#  if defined(__INTEL_COMPILER) || defined(_MSC_VER)
+  _mm_prefetch(addr, _MM_HINT_T0);
+  _mm_prefetch(addr+64, _MM_HINT_T0); // 64 bytes ahead
+#  else
+  __builtin_prefetch(addr);
+  __builtin_prefetch(addr+64);
+#  endif
 }
 
 #endif

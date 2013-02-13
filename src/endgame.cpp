@@ -20,19 +20,18 @@
 #include <algorithm>
 #include <cassert>
 
+#include "bitboard.h"
 #include "bitcount.h"
 #include "endgame.h"
 #include "movegen.h"
 
 using std::string;
 
-extern uint32_t probe_kpk_bitbase(Square wksq, Square wpsq, Square bksq, Color stm);
-
 namespace {
 
   // Table used to drive the defending king towards the edge of the board
   // in KX vs K and KQ vs KR endgames.
-  const int MateTable[64] = {
+  const int MateTable[SQUARE_NB] = {
     100, 90, 80, 70, 70, 80, 90, 100,
      90, 70, 60, 50, 50, 60, 70,  90,
      80, 60, 40, 30, 30, 40, 60,  80,
@@ -45,7 +44,7 @@ namespace {
 
   // Table used to drive the defending king towards a corner square of the
   // right color in KBN vs K endgames.
-  const int KBNKMateTable[64] = {
+  const int KBNKMateTable[SQUARE_NB] = {
     200, 190, 180, 170, 160, 150, 140, 130,
     190, 180, 170, 160, 150, 140, 130, 140,
     180, 170, 155, 140, 140, 125, 140, 150,
@@ -96,6 +95,7 @@ Endgames::Endgames() {
   add<KRKP>("KRKP");
   add<KRKB>("KRKB");
   add<KRKN>("KRKN");
+  add<KQKP>("KQKP");
   add<KQKR>("KQKR");
   add<KBBKN>("KBBKN");
 
@@ -133,7 +133,7 @@ Value Endgame<KXK>::operator()(const Position& pos) const {
 
   // Stalemate detection with lone king
   if (    pos.side_to_move() == weakerSide
-      && !pos.in_check()
+      && !pos.checkers()
       && !MoveList<LEGAL>(pos).size()) {
     return VALUE_DRAW;
   }
@@ -142,7 +142,7 @@ Value Endgame<KXK>::operator()(const Position& pos) const {
   Square loserKSq = pos.king_square(weakerSide);
 
   Value result =   pos.non_pawn_material(strongerSide)
-                 + pos.piece_count(strongerSide, PAWN) * PawnValueEndgame
+                 + pos.piece_count(strongerSide, PAWN) * PawnValueEg
                  + MateTable[loserKSq]
                  + DistanceBonus[square_distance(winnerKSq, loserKSq)];
 
@@ -163,19 +163,19 @@ Value Endgame<KBNK>::operator()(const Position& pos) const {
 
   assert(pos.non_pawn_material(weakerSide) == VALUE_ZERO);
   assert(pos.piece_count(weakerSide, PAWN) == VALUE_ZERO);
-  assert(pos.non_pawn_material(strongerSide) == KnightValueMidgame + BishopValueMidgame);
+  assert(pos.non_pawn_material(strongerSide) == KnightValueMg + BishopValueMg);
   assert(pos.piece_count(strongerSide, BISHOP) == 1);
   assert(pos.piece_count(strongerSide, KNIGHT) == 1);
   assert(pos.piece_count(strongerSide, PAWN) == 0);
 
   Square winnerKSq = pos.king_square(strongerSide);
   Square loserKSq = pos.king_square(weakerSide);
-  Square bishopSquare = pos.piece_list(strongerSide, BISHOP)[0];
+  Square bishopSq = pos.piece_list(strongerSide, BISHOP)[0];
 
   // kbnk_mate_table() tries to drive toward corners A1 or H8,
   // if we have a bishop that cannot reach the above squares we
   // mirror the kings so to drive enemy toward corners A8 or H1.
-  if (opposite_colors(bishopSquare, SQ_A1))
+  if (opposite_colors(bishopSq, SQ_A1))
   {
       winnerKSq = mirror(winnerKSq);
       loserKSq = mirror(loserKSq);
@@ -223,12 +223,10 @@ Value Endgame<KPK>::operator()(const Position& pos) const {
       wpsq = mirror(wpsq);
   }
 
-  if (!probe_kpk_bitbase(wksq, wpsq, bksq, stm))
+  if (!Bitbases::probe_kpk(wksq, wpsq, bksq, stm))
       return VALUE_DRAW;
 
-  Value result =  VALUE_KNOWN_WIN
-                + PawnValueEndgame
-                + Value(rank_of(wpsq));
+  Value result = VALUE_KNOWN_WIN + PawnValueEg + Value(rank_of(wpsq));
 
   return strongerSide == pos.side_to_move() ? result : -result;
 }
@@ -241,7 +239,7 @@ Value Endgame<KPK>::operator()(const Position& pos) const {
 template<>
 Value Endgame<KRKP>::operator()(const Position& pos) const {
 
-  assert(pos.non_pawn_material(strongerSide) == RookValueMidgame);
+  assert(pos.non_pawn_material(strongerSide) == RookValueMg);
   assert(pos.piece_count(strongerSide, PAWN) == 0);
   assert(pos.non_pawn_material(weakerSide) == 0);
   assert(pos.piece_count(weakerSide, PAWN) == 1);
@@ -267,13 +265,13 @@ Value Endgame<KRKP>::operator()(const Position& pos) const {
 
   // If the stronger side's king is in front of the pawn, it's a win
   if (wksq < bpsq && file_of(wksq) == file_of(bpsq))
-      result = RookValueEndgame - Value(square_distance(wksq, bpsq));
+      result = RookValueEg - Value(square_distance(wksq, bpsq));
 
   // If the weaker side's king is too far from the pawn and the rook,
   // it's a win
   else if (   square_distance(bksq, bpsq) - (tempo ^ 1) >= 3
            && square_distance(bksq, wrsq) >= 3)
-      result = RookValueEndgame - Value(square_distance(wksq, bpsq));
+      result = RookValueEg - Value(square_distance(wksq, bpsq));
 
   // If the pawn is far advanced and supported by the defending king,
   // the position is drawish
@@ -298,9 +296,9 @@ Value Endgame<KRKP>::operator()(const Position& pos) const {
 template<>
 Value Endgame<KRKB>::operator()(const Position& pos) const {
 
-  assert(pos.non_pawn_material(strongerSide) == RookValueMidgame);
+  assert(pos.non_pawn_material(strongerSide) == RookValueMg);
   assert(pos.piece_count(strongerSide, PAWN) == 0);
-  assert(pos.non_pawn_material(weakerSide) == BishopValueMidgame);
+  assert(pos.non_pawn_material(weakerSide) == BishopValueMg);
   assert(pos.piece_count(weakerSide, PAWN) == 0);
   assert(pos.piece_count(weakerSide, BISHOP) == 1);
 
@@ -314,9 +312,9 @@ Value Endgame<KRKB>::operator()(const Position& pos) const {
 template<>
 Value Endgame<KRKN>::operator()(const Position& pos) const {
 
-  assert(pos.non_pawn_material(strongerSide) == RookValueMidgame);
+  assert(pos.non_pawn_material(strongerSide) == RookValueMg);
   assert(pos.piece_count(strongerSide, PAWN) == 0);
-  assert(pos.non_pawn_material(weakerSide) == KnightValueMidgame);
+  assert(pos.non_pawn_material(weakerSide) == KnightValueMg);
   assert(pos.piece_count(weakerSide, PAWN) == 0);
   assert(pos.piece_count(weakerSide, KNIGHT) == 1);
 
@@ -329,6 +327,37 @@ Value Endgame<KRKN>::operator()(const Position& pos) const {
 }
 
 
+/// KQ vs KP.  In general, a win for the stronger side, however, there are a few
+/// important exceptions.  Pawn on 7th rank, A,C,F or H file, with king next can
+/// be a draw, so we scale down to distance between kings only.
+template<>
+Value Endgame<KQKP>::operator()(const Position& pos) const {
+
+  assert(pos.non_pawn_material(strongerSide) == QueenValueMg);
+  assert(pos.piece_count(strongerSide, PAWN) == 0);
+  assert(pos.non_pawn_material(weakerSide) == 0);
+  assert(pos.piece_count(weakerSide, PAWN) == 1);
+
+  Square winnerKSq = pos.king_square(strongerSide);
+  Square loserKSq = pos.king_square(weakerSide);
+  Square pawnSq = pos.piece_list(weakerSide, PAWN)[0];
+
+  Value result =  QueenValueEg
+                - PawnValueEg
+                + DistanceBonus[square_distance(winnerKSq, loserKSq)];
+
+  if (   square_distance(loserKSq, pawnSq) == 1
+      && relative_rank(weakerSide, pawnSq) == RANK_7)
+  {
+      File f = file_of(pawnSq);
+
+      if (f == FILE_A || f == FILE_C || f == FILE_F || f == FILE_H)
+          result = Value(DistanceBonus[square_distance(winnerKSq, loserKSq)]);
+  }
+  return strongerSide == pos.side_to_move() ? result : -result;
+}
+
+
 /// KQ vs KR.  This is almost identical to KX vs K:  We give the attacking
 /// king a bonus for having the kings close together, and for forcing the
 /// defending king towards the edge.  If we also take care to avoid null move
@@ -337,16 +366,16 @@ Value Endgame<KRKN>::operator()(const Position& pos) const {
 template<>
 Value Endgame<KQKR>::operator()(const Position& pos) const {
 
-  assert(pos.non_pawn_material(strongerSide) == QueenValueMidgame);
+  assert(pos.non_pawn_material(strongerSide) == QueenValueMg);
   assert(pos.piece_count(strongerSide, PAWN) == 0);
-  assert(pos.non_pawn_material(weakerSide) == RookValueMidgame);
+  assert(pos.non_pawn_material(weakerSide) == RookValueMg);
   assert(pos.piece_count(weakerSide, PAWN) == 0);
 
   Square winnerKSq = pos.king_square(strongerSide);
   Square loserKSq = pos.king_square(weakerSide);
 
-  Value result =  QueenValueEndgame
-                - RookValueEndgame
+  Value result =  QueenValueEg
+                - RookValueEg
                 + MateTable[loserKSq]
                 + DistanceBonus[square_distance(winnerKSq, loserKSq)];
 
@@ -357,12 +386,12 @@ template<>
 Value Endgame<KBBKN>::operator()(const Position& pos) const {
 
   assert(pos.piece_count(strongerSide, BISHOP) == 2);
-  assert(pos.non_pawn_material(strongerSide) == 2*BishopValueMidgame);
+  assert(pos.non_pawn_material(strongerSide) == 2*BishopValueMg);
   assert(pos.piece_count(weakerSide, KNIGHT) == 1);
-  assert(pos.non_pawn_material(weakerSide) == KnightValueMidgame);
+  assert(pos.non_pawn_material(weakerSide) == KnightValueMg);
   assert(!pos.pieces(PAWN));
 
-  Value result = BishopValueEndgame;
+  Value result = BishopValueEg;
   Square wksq = pos.king_square(strongerSide);
   Square bksq = pos.king_square(weakerSide);
   Square nsq = pos.piece_list(weakerSide, KNIGHT)[0];
@@ -399,7 +428,7 @@ Value Endgame<KNNK>::operator()(const Position&) const {
 template<>
 ScaleFactor Endgame<KBPsK>::operator()(const Position& pos) const {
 
-  assert(pos.non_pawn_material(strongerSide) == BishopValueMidgame);
+  assert(pos.non_pawn_material(strongerSide) == BishopValueMg);
   assert(pos.piece_count(strongerSide, BISHOP) == 1);
   assert(pos.piece_count(strongerSide, PAWN) >= 1);
 
@@ -442,6 +471,29 @@ ScaleFactor Endgame<KBPsK>::operator()(const Position& pos) const {
               return SCALE_FACTOR_DRAW;
       }
   }
+
+  // All pawns on same B or G file? Then potential draw
+  if (    (pawnFile == FILE_B || pawnFile == FILE_G)
+      && !(pos.pieces(PAWN) & ~file_bb(pawnFile))
+      && pos.non_pawn_material(weakerSide) == 0
+      && pos.piece_count(weakerSide, PAWN) >= 1)
+  {
+      // Get weaker pawn closest to opponent's queening square
+      Bitboard wkPawns = pos.pieces(weakerSide, PAWN);
+      Square weakerPawnSq = strongerSide == WHITE ? msb(wkPawns) : lsb(wkPawns);
+
+      Square strongerKingSq = pos.king_square(strongerSide);
+      Square weakerKingSq = pos.king_square(weakerSide);
+      Square bishopSq = pos.piece_list(strongerSide, BISHOP)[0];
+
+      // Draw if weaker pawn is on rank 7, bishop can't attack the pawn, and
+      // weaker king can stop opposing opponent's king from penetrating.
+      if (   relative_rank(strongerSide, weakerPawnSq) == RANK_7
+          && opposite_colors(bishopSq, weakerPawnSq)
+          && square_distance(weakerPawnSq, weakerKingSq) <= square_distance(weakerPawnSq, strongerKingSq))
+          return SCALE_FACTOR_DRAW;
+  }
+
   return SCALE_FACTOR_NONE;
 }
 
@@ -451,7 +503,7 @@ ScaleFactor Endgame<KBPsK>::operator()(const Position& pos) const {
 template<>
 ScaleFactor Endgame<KQKRPs>::operator()(const Position& pos) const {
 
-  assert(pos.non_pawn_material(strongerSide) == QueenValueMidgame);
+  assert(pos.non_pawn_material(strongerSide) == QueenValueMg);
   assert(pos.piece_count(strongerSide, QUEEN) == 1);
   assert(pos.piece_count(strongerSide, PAWN) == 0);
   assert(pos.piece_count(weakerSide, ROOK) == 1);
@@ -481,9 +533,9 @@ ScaleFactor Endgame<KQKRPs>::operator()(const Position& pos) const {
 template<>
 ScaleFactor Endgame<KRPKR>::operator()(const Position& pos) const {
 
-  assert(pos.non_pawn_material(strongerSide) == RookValueMidgame);
+  assert(pos.non_pawn_material(strongerSide) == RookValueMg);
   assert(pos.piece_count(strongerSide, PAWN) == 1);
-  assert(pos.non_pawn_material(weakerSide) == RookValueMidgame);
+  assert(pos.non_pawn_material(weakerSide) == RookValueMg);
   assert(pos.piece_count(weakerSide, PAWN) == 0);
 
   Square wksq = pos.king_square(strongerSide);
@@ -599,9 +651,9 @@ ScaleFactor Endgame<KRPKR>::operator()(const Position& pos) const {
 template<>
 ScaleFactor Endgame<KRPPKRP>::operator()(const Position& pos) const {
 
-  assert(pos.non_pawn_material(strongerSide) == RookValueMidgame);
+  assert(pos.non_pawn_material(strongerSide) == RookValueMg);
   assert(pos.piece_count(strongerSide, PAWN) == 2);
-  assert(pos.non_pawn_material(weakerSide) == RookValueMidgame);
+  assert(pos.non_pawn_material(weakerSide) == RookValueMg);
   assert(pos.piece_count(weakerSide, PAWN) == 1);
 
   Square wpsq1 = pos.piece_list(strongerSide, PAWN)[0];
@@ -651,7 +703,7 @@ ScaleFactor Endgame<KPsK>::operator()(const Position& pos) const {
       // Does the defending king block the pawns?
       if (   square_distance(ksq, relative_square(strongerSide, SQ_A8)) <= 1
           || (    file_of(ksq) == FILE_A
-              && !in_front_bb(strongerSide, ksq) & pawns))
+              && !(in_front_bb(strongerSide, ksq) & pawns)))
           return SCALE_FACTOR_DRAW;
   }
   // Are all pawns on the 'h' file?
@@ -660,7 +712,7 @@ ScaleFactor Endgame<KPsK>::operator()(const Position& pos) const {
     // Does the defending king block the pawns?
     if (   square_distance(ksq, relative_square(strongerSide, SQ_H8)) <= 1
         || (    file_of(ksq) == FILE_H
-            && !in_front_bb(strongerSide, ksq) & pawns))
+            && !(in_front_bb(strongerSide, ksq) & pawns)))
         return SCALE_FACTOR_DRAW;
   }
   return SCALE_FACTOR_NONE;
@@ -674,10 +726,10 @@ ScaleFactor Endgame<KPsK>::operator()(const Position& pos) const {
 template<>
 ScaleFactor Endgame<KBPKB>::operator()(const Position& pos) const {
 
-  assert(pos.non_pawn_material(strongerSide) == BishopValueMidgame);
+  assert(pos.non_pawn_material(strongerSide) == BishopValueMg);
   assert(pos.piece_count(strongerSide, BISHOP) == 1);
   assert(pos.piece_count(strongerSide, PAWN) == 1);
-  assert(pos.non_pawn_material(weakerSide) == BishopValueMidgame);
+  assert(pos.non_pawn_material(weakerSide) == BishopValueMg);
   assert(pos.piece_count(weakerSide, BISHOP) == 1);
   assert(pos.piece_count(weakerSide, PAWN) == 0);
 
@@ -729,10 +781,10 @@ ScaleFactor Endgame<KBPKB>::operator()(const Position& pos) const {
 template<>
 ScaleFactor Endgame<KBPPKB>::operator()(const Position& pos) const {
 
-  assert(pos.non_pawn_material(strongerSide) == BishopValueMidgame);
+  assert(pos.non_pawn_material(strongerSide) == BishopValueMg);
   assert(pos.piece_count(strongerSide, BISHOP) == 1);
   assert(pos.piece_count(strongerSide, PAWN) == 2);
-  assert(pos.non_pawn_material(weakerSide) == BishopValueMidgame);
+  assert(pos.non_pawn_material(weakerSide) == BishopValueMg);
   assert(pos.piece_count(weakerSide, BISHOP) == 1);
   assert(pos.piece_count(weakerSide, PAWN) == 0);
 
@@ -804,10 +856,10 @@ ScaleFactor Endgame<KBPPKB>::operator()(const Position& pos) const {
 template<>
 ScaleFactor Endgame<KBPKN>::operator()(const Position& pos) const {
 
-  assert(pos.non_pawn_material(strongerSide) == BishopValueMidgame);
+  assert(pos.non_pawn_material(strongerSide) == BishopValueMg);
   assert(pos.piece_count(strongerSide, BISHOP) == 1);
   assert(pos.piece_count(strongerSide, PAWN) == 1);
-  assert(pos.non_pawn_material(weakerSide) == KnightValueMidgame);
+  assert(pos.non_pawn_material(weakerSide) == KnightValueMg);
   assert(pos.piece_count(weakerSide, KNIGHT) == 1);
   assert(pos.piece_count(weakerSide, PAWN) == 0);
 
@@ -831,7 +883,7 @@ ScaleFactor Endgame<KBPKN>::operator()(const Position& pos) const {
 template<>
 ScaleFactor Endgame<KNPK>::operator()(const Position& pos) const {
 
-  assert(pos.non_pawn_material(strongerSide) == KnightValueMidgame);
+  assert(pos.non_pawn_material(strongerSide) == KnightValueMg);
   assert(pos.piece_count(strongerSide, KNIGHT) == 1);
   assert(pos.piece_count(strongerSide, PAWN) == 1);
   assert(pos.non_pawn_material(weakerSide) == VALUE_ZERO);
@@ -893,5 +945,5 @@ ScaleFactor Endgame<KPKP>::operator()(const Position& pos) const {
 
   // Probe the KPK bitbase with the weakest side's pawn removed. If it's a draw,
   // it's probably at least a draw even with the pawn.
-  return probe_kpk_bitbase(wksq, wpsq, bksq, stm) ? SCALE_FACTOR_NONE : SCALE_FACTOR_DRAW;
+  return Bitbases::probe_kpk(wksq, wpsq, bksq, stm) ? SCALE_FACTOR_NONE : SCALE_FACTOR_DRAW;
 }

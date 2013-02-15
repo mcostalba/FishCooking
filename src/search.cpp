@@ -600,12 +600,13 @@ namespace {
             eval = ss->staticEval = evaluate(pos, ss->evalMargin);
 
         // Can ttValue be used as a better position evaluation?
-        if (ttValue != VALUE_NONE)
+        if (ttValue != VALUE_NONE) {
             if (   ((tte->type() & BOUND_LOWER) && ttValue > eval)
                 || ((tte->type() & BOUND_UPPER) && ttValue < eval))
                 eval = ttValue;
 
-        skipNull = (tte->type() & BOUND_UPPER) && ttValue < beta;
+            skipNull = (tte->type() & BOUND_LOWER) && ttValue < beta;
+        }
     }
     else
     {

@@ -98,7 +98,7 @@ namespace {
   void id_loop(Position& pos);
   Value value_to_tt(Value v, int ply);
   Value value_from_tt(Value v, int ply);
-  bool check_is_dangerous(Position& pos, Move move, Value futilityBase, Value beta);
+  bool check_is_dangerous(const Position& pos, Move move, Value futilityBase, Value beta);
   bool allows(const Position& pos, Move first, Move second);
   bool refutes(const Position& pos, Move first, Move second);
   string uci_pv(const Position& pos, int depth, Value alpha, Value beta);
@@ -354,7 +354,7 @@ namespace {
                 // we want to keep the same order for all the moves but the new
                 // PV that goes to the front. Note that in case of MultiPV search
                 // the already searched PV lines are preserved.
-                sort<RootMove>(RootMoves.begin() + PVIdx, RootMoves.end());
+                std::stable_sort(RootMoves.begin() + PVIdx, RootMoves.end());
 
                 // Write PV back to transposition table in case the relevant
                 // entries have been overwritten during the search.
@@ -399,7 +399,7 @@ namespace {
             }
 
             // Sort the PV lines searched so far and update the GUI
-            sort<RootMove>(RootMoves.begin(), RootMoves.begin() + PVIdx + 1);
+            std::stable_sort(RootMoves.begin(), RootMoves.begin() + PVIdx + 1);
 
             if (PVIdx + 1 == PVSize || Time::now() - SearchTime > 3000)
                 sync_cout << uci_pv(pos, depth, alpha, beta) << sync_endl;
@@ -594,8 +594,8 @@ namespace {
     else if (tte)
     {
         // Never assume anything on values stored in TT
-        if (  (ss->staticEval = eval = tte->static_value()) == VALUE_NONE
-            ||(ss->evalMargin = tte->static_value_margin()) == VALUE_NONE)
+        if (  (ss->staticEval = eval = tte->eval_value()) == VALUE_NONE
+            ||(ss->evalMargin = tte->eval_margin()) == VALUE_NONE)
             eval = ss->staticEval = evaluate(pos, ss->evalMargin);
 
         // Can ttValue be used as a better position evaluation?
@@ -1025,7 +1025,7 @@ split_point_start: // At split points actual search starts from here
       // Step 19. Check for splitting the search
       if (   !SpNode
           &&  depth >= Threads.minimumSplitDepth
-          &&  Threads.slave_available(thisThread)
+          &&  Threads.available_slave(thisThread)
           &&  thisThread->splitPointsSize < MAX_SPLITPOINTS_PER_THREAD)
       {
           assert(bestValue < beta);
@@ -1164,8 +1164,8 @@ split_point_start: // At split points actual search starts from here
         if (tte)
         {
             // Never assume anything on values stored in TT
-            if (  (ss->staticEval = bestValue = tte->static_value()) == VALUE_NONE
-                ||(ss->evalMargin = tte->static_value_margin()) == VALUE_NONE)
+            if (  (ss->staticEval = bestValue = tte->eval_value()) == VALUE_NONE
+                ||(ss->evalMargin = tte->eval_margin()) == VALUE_NONE)
                 ss->staticEval = bestValue = evaluate(pos, ss->evalMargin);
         }
         else
@@ -1335,7 +1335,7 @@ split_point_start: // At split points actual search starts from here
 
   // check_is_dangerous() tests if a checking move can be pruned in qsearch()
 
-  bool check_is_dangerous(Position& pos, Move move, Value futilityBase, Value beta)
+  bool check_is_dangerous(const Position& pos, Move move, Value futilityBase, Value beta)
   {
     Piece pc = pos.piece_moved(move);
     Square from = from_sq(move);
@@ -1672,9 +1672,9 @@ void Thread::idle_loop() {
 
           sp->mutex.lock();
 
-          assert(sp->slavesPositions[idx] == NULL);
+          assert(activePosition == NULL);
 
-          sp->slavesPositions[idx] = &pos;
+          activePosition = &pos;
 
           switch (sp->nodeType) {
           case Root:
@@ -1693,7 +1693,7 @@ void Thread::idle_loop() {
           assert(searching);
 
           searching = false;
-          sp->slavesPositions[idx] = NULL;
+          activePosition = NULL;
           sp->slavesMask &= ~(1ULL << idx);
           sp->nodes += pos.nodes_searched();
 
@@ -1742,7 +1742,7 @@ void check_time() {
       nodes = RootPos.nodes_searched();
 
       // Loop across all split points and sum accumulated SplitPoint nodes plus
-      // all the currently active slaves positions.
+      // all the currently active positions nodes.
       for (size_t i = 0; i < Threads.size(); i++)
           for (int j = 0; j < Threads[i]->splitPointsSize; j++)
           {
@@ -1754,8 +1754,9 @@ void check_time() {
               Bitboard sm = sp.slavesMask;
               while (sm)
               {
-                  Position* pos = sp.slavesPositions[pop_lsb(&sm)];
-                  nodes += pos ? pos->nodes_searched() : 0;
+                  Position* pos = Threads[pop_lsb(&sm)]->activePosition;
+                  if (pos)
+                      nodes += pos->nodes_searched();
               }
 
               sp.mutex.unlock();

@@ -456,6 +456,10 @@ Value do_evaluate(const Position& pos, Value& margin) {
   margin = margins[pos.side_to_move()];
   Value v = interpolate(score, ei.mi->game_phase(), sf);
 
+  if (v > 40) { v = Value(40 + (v - 40) * 15 / 16); }
+  else if (v > 80) { v = Value(80 + (v - 80) * 14 / 16); }
+  else if (v > 160) { v = Value(160 + (v - 160) * 13 / 16); }
+
   // In case of tracing add all single evaluation contributions for both white and black
   if (Trace)
   {

@@ -767,8 +767,8 @@ split_point_start: // At split points actual search starts from here
     value = bestValue; // Workaround a bogus 'uninitialized' warning under gcc
     singularExtensionNode =   !RootNode
                            && !SpNode
-                           &&  depth >= (PvNode ? 6 * ONE_PLY : 8 * ONE_PLY)
-                           && !allNode
+                           &&  depth >= 8 * ONE_PLY
+                           && (PvNode || !allNode)
                            &&  ttMove != MOVE_NONE
                            && !excludedMove // Recursive singular search is not allowed
                            &&  tte->depth() >= depth - 3 * ONE_PLY;
@@ -842,7 +842,7 @@ split_point_start: // At split points actual search starts from here
       {
           assert(ttValue != VALUE_NONE);
 
-          Value rBeta = ttValue - (int(depth) / 2 + ((int(depth) / 8) * 35));
+          Value rBeta = ttValue - (PvNode ? int(depth) / 2 : int(depth) * 2);
           ss->excludedMove = move;
           ss->skipNullMove = true;
           value = search<NonPV>(pos, ss, rBeta - 1, rBeta, depth / 2, true);

@@ -421,12 +421,14 @@ Value do_evaluate(const Position& pos, Value& margin) {
   if (!pos.non_pawn_material(WHITE) || !pos.non_pawn_material(BLACK))
       score += evaluate_unstoppable_pawns(pos, ei);
 
+/*
   // Evaluate space for both sides, only in middle-game.
   if (ei.mi->space_weight())
   {
       int s = evaluate_space<WHITE>(pos, ei) - evaluate_space<BLACK>(pos, ei);
       score += apply_weight(make_score(s * ei.mi->space_weight(), 0), Weights[Space]);
   }
+*/
 
   // Scale winning side if position is more drawish that what it appears
   ScaleFactor sf = eg_value(score) > VALUE_DRAW ? ei.mi->scale_factor(pos, WHITE)

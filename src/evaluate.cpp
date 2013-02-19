@@ -453,9 +453,9 @@ Value do_evaluate(const Position& pos, Value& margin) {
            sf = ScaleFactor(50);
   }
 
-  // Scale score down with game ply
-  if (pos.game_ply() > 50 && sf == SCALE_FACTOR_NORMAL)
-      sf = ScaleFactor(std::max(sf * (64 + 50 - pos.game_ply()) / 64, 20));
+  // Scale score down with game ply, around 1% every 10 plies
+  score = make_score(mg_value(score) * (1024 - pos.game_ply()) / 1024,
+                     eg_value(score) * (1024 - pos.game_ply()) / 1024);
 
   margin = margins[pos.side_to_move()];
   Value v = interpolate(score, ei.mi->game_phase(), sf);

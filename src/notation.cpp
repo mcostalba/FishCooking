@@ -1,7 +1,7 @@
 /*
   Stockfish, a UCI chess playing engine derived from Glaurung 2.1
   Copyright (C) 2004-2008 Tord Romstad (Glaurung author)
-  Copyright (C) 2008-2012 Marco Costalba, Joona Kiiski, Tord Romstad
+  Copyright (C) 2008-2013 Marco Costalba, Joona Kiiski, Tord Romstad
 
   Stockfish is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -108,10 +108,9 @@ const string move_to_san(Position& pos, Move m) {
   if (m == MOVE_NULL)
       return "(null)";
 
-  assert(pos.move_is_legal(m));
+  assert(MoveList<LEGAL>(pos).contains(m));
 
-  Bitboard attackers;
-  bool ambiguousMove, ambiguousFile, ambiguousRank;
+  Bitboard others, b;
   string san;
   Color us = pos.side_to_move();
   Square from = from_sq(m);
@@ -127,31 +126,23 @@ const string move_to_san(Position& pos, Move m) {
       {
           san = PieceToChar[WHITE][pt]; // Upper case
 
-          // Disambiguation if we have more then one piece with destination 'to'
-          // note that for pawns is not needed because starting file is explicit.
-          ambiguousMove = ambiguousFile = ambiguousRank = false;
+          // Disambiguation if we have more then one piece of type 'pt' that can
+          // reach 'to' with a legal move.
+          others = b = (pos.attacks_from(pc, to) & pos.pieces(us, pt)) ^ from;
 
-          attackers = (pos.attacks_from(pc, to) & pos.pieces(us, pt)) ^ from;
-
-          while (attackers)
+          while (b)
           {
-              Square sq = pop_lsb(&attackers);
-
-              // Pinned pieces are not included in the possible sub-set
-              if (!pos.pl_move_is_legal(make_move(sq, to), pos.pinned_pieces()))
-                  continue;
-
-              ambiguousFile |= file_of(sq) == file_of(from);
-              ambiguousRank |= rank_of(sq) == rank_of(from);
-              ambiguousMove = true;
+              Move move = make_move(pop_lsb(&b), to);
+              if (!pos.pl_move_is_legal(move, pos.pinned_pieces()))
+                  others ^= from_sq(move);
           }
 
-          if (ambiguousMove)
+          if (others)
           {
-              if (!ambiguousFile)
+              if (!(others & file_bb(from)))
                   san += file_to_char(file_of(from));
 
-              else if (!ambiguousRank)
+              else if (!(others & rank_bb(from)))
                   san += rank_to_char(rank_of(from));
 
               else

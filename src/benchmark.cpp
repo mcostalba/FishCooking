@@ -1,7 +1,7 @@
 /*
   Stockfish, a UCI chess playing engine derived from Glaurung 2.1
   Copyright (C) 2004-2008 Tord Romstad (Glaurung author)
-  Copyright (C) 2008-2012 Marco Costalba, Joona Kiiski, Tord Romstad
+  Copyright (C) 2008-2013 Marco Costalba, Joona Kiiski, Tord Romstad
 
   Stockfish is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -82,6 +82,9 @@ void benchmark(const Position& current, istream& is) {
   else if (limitType == "nodes")
       limits.nodes = atoi(limit.c_str());
 
+  else if (limitType == "mate")
+      limits.mate = atoi(limit.c_str());
+
   else
       limits.depth = atoi(limit.c_str());
 
@@ -99,7 +102,7 @@ void benchmark(const Position& current, istream& is) {
       if (!file.is_open())
       {
           cerr << "Unable to open file " << fenFile << endl;
-          exit(EXIT_FAILURE);
+          return;
       }
 
       while (getline(file, fen))
@@ -127,8 +130,8 @@ void benchmark(const Position& current, istream& is) {
       }
       else
       {
-          Threads.start_searching(pos, limits, vector<Move>(), st);
-          Threads.wait_for_search_finished();
+          Threads.start_thinking(pos, limits, vector<Move>(), st);
+          Threads.wait_for_think_finished();
           nodes += Search::RootPos.nodes_searched();
       }
   }

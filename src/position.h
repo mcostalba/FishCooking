@@ -1,7 +1,7 @@
 /*
   Stockfish, a UCI chess playing engine derived from Glaurung 2.1
   Copyright (C) 2004-2008 Tord Romstad (Glaurung author)
-  Copyright (C) 2008-2012 Marco Costalba, Joona Kiiski, Tord Romstad
+  Copyright (C) 2008-2013 Marco Costalba, Joona Kiiski, Tord Romstad
 
   Stockfish is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -30,7 +30,7 @@
 /// The checkInfo struct is initialized at c'tor time and keeps info used
 /// to detect if a move gives check.
 class Position;
-class Thread;
+struct Thread;
 
 struct CheckInfo {
 
@@ -122,7 +122,6 @@ public:
   Square castle_rook_square(Color c, CastlingSide s) const;
 
   // Checking
-  bool in_check() const;
   Bitboard checkers() const;
   Bitboard discovered_check_candidates() const;
   Bitboard pinned_pieces() const;
@@ -137,7 +136,6 @@ public:
 
   // Properties of moves
   bool move_gives_check(Move m, const CheckInfo& ci) const;
-  bool move_is_legal(const Move m) const;
   bool pl_move_is_legal(Move m, Bitboard pinned) const;
   bool is_pseudo_legal(const Move m) const;
   bool is_capture(Move m) const;
@@ -156,7 +154,8 @@ public:
   void do_move(Move m, StateInfo& st);
   void do_move(Move m, StateInfo& st, const CheckInfo& ci, bool moveIsCheck);
   void undo_move(Move m);
-  template<bool Do> void do_null_move(StateInfo& st);
+  void do_null_move(StateInfo& st);
+  void undo_null_move();
 
   // Static exchange evaluation
   int see(Move m) const;
@@ -175,12 +174,12 @@ public:
 
   // Other properties of the position
   Color side_to_move() const;
-  int startpos_ply_counter() const;
+  int game_ply() const;
   bool is_chess960() const;
   Thread* this_thread() const;
   int64_t nodes_searched() const;
   void set_nodes_searched(int64_t n);
-  template<bool CheckRepetition, bool CheckThreeFold> bool is_draw() const;
+  template<bool SkipRepetition> bool is_draw() const;
 
   // Position consistency check, for debugging
   bool pos_is_ok(int* failedStep = NULL) const;
@@ -192,8 +191,8 @@ private:
   void put_piece(Piece p, Square s);
   void set_castle_right(Color c, Square rfrom);
 
-  // Helper template functions
-  template<bool Do> void do_castle_move(Move m);
+  // Helper functions
+  void do_castle(Square kfrom, Square kto, Square rfrom, Square rto);
   template<bool FindPinned> Bitboard hidden_checkers() const;
 
   // Computing hash keys from scratch (for initialization and debugging)
@@ -219,7 +218,7 @@ private:
   Bitboard castlePath[COLOR_NB][CASTLING_SIDE_NB];
   StateInfo startState;
   int64_t nodes;
-  int startPosPly;
+  int gamePly;
   Color sideToMove;
   Thread* thisThread;
   StateInfo* st;
@@ -331,10 +330,6 @@ inline Bitboard Position::checkers() const {
   return st->checkersBB;
 }
 
-inline bool Position::in_check() const {
-  return st->checkersBB != 0;
-}
-
 inline Bitboard Position::discovered_check_candidates() const {
   return hidden_checkers<false>();
 }
@@ -381,8 +376,8 @@ inline bool Position::is_passed_pawn_push(Move m) const {
         && pawn_is_passed(sideToMove, to_sq(m));
 }
 
-inline int Position::startpos_ply_counter() const {
-  return startPosPly + st->pliesFromNull; // HACK
+inline int Position::game_ply() const {
+  return gamePly;
 }
 
 inline bool Position::opposite_bishops() const {

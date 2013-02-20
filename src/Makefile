@@ -1,6 +1,6 @@
 # Stockfish, a UCI chess playing engine derived from Glaurung 2.1
 # Copyright (C) 2004-2008 Tord Romstad (Glaurung author)
-# Copyright (C) 2008-2012 Marco Costalba, Joona Kiiski, Tord Romstad
+# Copyright (C) 2008-2013 Marco Costalba, Joona Kiiski, Tord Romstad
 #
 # Stockfish is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -242,7 +242,7 @@ ifeq ($(comp),mingw)
 endif
 
 ifeq ($(comp),icc)
-	CXXFLAGS += -wd383,981,1418,1419,10187,10188,11505,11503 -Wcheck -Wabi -Wdeprecated -strict-ansi
+	CXXFLAGS += -wd383,981,1418,1419,1476,10187,10188,11505,11503 -Wcheck -Wabi -Wdeprecated -strict-ansi
 endif
 
 ifeq ($(comp),clang)

@@ -1,7 +1,7 @@
 /*
   Stockfish, a UCI chess playing engine derived from Glaurung 2.1
   Copyright (C) 2004-2008 Tord Romstad (Glaurung author)
-  Copyright (C) 2008-2012 Marco Costalba, Joona Kiiski, Tord Romstad
+  Copyright (C) 2008-2013 Marco Costalba, Joona Kiiski, Tord Romstad
 
   Stockfish is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -441,8 +441,8 @@ inline int square_distance(Square s1, Square s2) {
   return SquareDistance[s1][s2];
 }
 
-inline char file_to_char(File f) {
-  return char(f - FILE_A + 'a');
+inline char file_to_char(File f, bool tolower = true) {
+  return char(f - FILE_A + (tolower ? 'a' : 'A'));
 }
 
 inline char rank_to_char(Rank r) {
@@ -475,7 +475,7 @@ inline Move make_move(Square from, Square to) {
 
 template<MoveType T>
 inline Move make(Square from, Square to, PieceType pt = KNIGHT) {
-  return Move(to | (from << 6) | T | ((pt - KNIGHT) << 12)) ;
+  return Move(to | (from << 6) | T | ((pt - KNIGHT) << 12));
 }
 
 inline bool is_ok(Move m) {
@@ -487,23 +487,6 @@ inline bool is_ok(Move m) {
 inline const std::string square_to_string(Square s) {
   char ch[] = { file_to_char(file_of(s)), rank_to_char(rank_of(s)), 0 };
   return ch;
-}
-
-/// Our insertion sort implementation, works with pointers and iterators and is
-/// guaranteed to be stable, as is needed.
-template<typename T, typename K>
-void sort(K begin, K end)
-{
-  T tmp;
-  K p, q;
-
-  for (p = begin + 1; p < end; p++)
-  {
-      tmp = *p;
-      for (q = p; q != begin && *(q-1) < tmp; --q)
-          *q = *(q-1);
-      *q = tmp;
-  }
 }
 
 #endif // !defined(TYPES_H_INCLUDED)

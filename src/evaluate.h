@@ -1,7 +1,7 @@
 /*
   Stockfish, a UCI chess playing engine derived from Glaurung 2.1
   Copyright (C) 2004-2008 Tord Romstad (Glaurung author)
-  Copyright (C) 2008-2012 Marco Costalba, Joona Kiiski, Tord Romstad
+  Copyright (C) 2008-2013 Marco Costalba, Joona Kiiski, Tord Romstad
 
   Stockfish is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -20,7 +20,6 @@
 #if !defined(EVALUATE_H_INCLUDED)
 #define EVALUATE_H_INCLUDED
 
-#include "misc.h"
 #include "types.h"
 
 class Position;
@@ -30,16 +29,6 @@ namespace Eval {
 extern void init();
 extern Value evaluate(const Position& pos, Value& margin);
 extern std::string trace(const Position& pos);
-
-const int TableSize = 262144;
-
-struct Entry {
-  Key key;
-  Value value;
-  int16_t margins[2];
-};
-
-struct Table : HashTable<Entry, TableSize> {};
 
 }
 

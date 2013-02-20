@@ -50,8 +50,8 @@ struct Stats {
     if (Gain)
         table[p][to] = std::max(v, table[p][to] - 1);
 
-    else if (abs(table[p][to] + v) < Max)
-        table[p][to] +=  v;
+    else 
+        table[p][to] = Value(((table[p][to] * 31) >> 5) + v);
   }
 
 private:

@@ -194,7 +194,7 @@ void MovePicker::score<QUIETS>() {
   for (MoveStack* it = moves; it != end; ++it)
   {
       m = it->move;
-      it->score = Hist[pos.piece_moved(m)][to_sq(m)];
+      it->score = Hist[pos.piece_moved(m)][to_sq(m)] >> 2;
   }
 }
 
@@ -216,7 +216,7 @@ void MovePicker::score<EVASIONS>() {
           it->score =  PieceValue[MG][pos.piece_on(to_sq(m))]
                      - type_of(pos.piece_moved(m)) + History::Max;
       else
-          it->score = Hist[pos.piece_moved(m)][to_sq(m)];
+          it->score = Hist[pos.piece_moved(m)][to_sq(m)] >> 2;
   }
 }
 

@@ -529,8 +529,8 @@ Value do_evaluate(const Position& pos, Value& margin) {
         else
             bonus += bonus / 2;
     }
-    bonus = (bonus * 3) / 4;
-    if (bonus && (~forward_bb(Us, s) & passed_pawn_mask(Us, s) & pos.pieces(Them, PAWN)))
+    // Scale bonus down if pawns can advance to attack the piece
+    if (bonus && (passed_pawn_mask(Us, s) & pos.pieces(Them, PAWN)))
         bonus = (bonus * 3) / 4;
     return make_score(bonus, bonus);
   }

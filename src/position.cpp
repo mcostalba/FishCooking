@@ -1,7 +1,7 @@
 /*
   Stockfish, a UCI chess playing engine derived from Glaurung 2.1
   Copyright (C) 2004-2008 Tord Romstad (Glaurung author)
-  Copyright (C) 2008-2012 Marco Costalba, Joona Kiiski, Tord Romstad
+  Copyright (C) 2008-2013 Marco Costalba, Joona Kiiski, Tord Romstad
 
   Stockfish is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -19,6 +19,7 @@
 
 #include <cassert>
 #include <cstring>
+#include <iomanip>
 #include <iostream>
 #include <sstream>
 #include <algorithm>
@@ -278,11 +279,11 @@ void Position::set(const string& fenStr, bool isChess960, Thread* th) {
   }
 
   // 5-6. Halfmove clock and fullmove number
-  ss >> std::skipws >> st->rule50 >> startPosPly;
+  ss >> std::skipws >> st->rule50 >> gamePly;
 
   // Convert from fullmove starting from 1 to ply starting from 0,
   // handle also common incorrect FEN with fullmove = 0.
-  startPosPly = std::max(2 * (startPosPly - 1), 0) + int(sideToMove == BLACK);
+  gamePly = std::max(2 * (gamePly - 1), 0) + int(sideToMove == BLACK);
 
   st->key = compute_key();
   st->pawnKey = compute_pawn_key();
@@ -331,32 +332,25 @@ void Position::set_castle_right(Color c, Square rfrom) {
 const string Position::fen() const {
 
   std::ostringstream ss;
-  Square sq;
-  int emptyCnt;
 
   for (Rank rank = RANK_8; rank >= RANK_1; rank--)
   {
-      emptyCnt = 0;
-
       for (File file = FILE_A; file <= FILE_H; file++)
       {
-          sq = file | rank;
+          Square sq = file | rank;
 
           if (is_empty(sq))
-              emptyCnt++;
-          else
           {
-              if (emptyCnt > 0)
-              {
-                  ss << emptyCnt;
-                  emptyCnt = 0;
-              }
-              ss << PieceToChar[piece_on(sq)];
-          }
-      }
+              int emptyCnt = 1;
 
-      if (emptyCnt > 0)
-          ss << emptyCnt;
+              for ( ; file < FILE_H && is_empty(sq++); file++)
+                  emptyCnt++;
+
+              ss << emptyCnt;
+          }
+          else
+              ss << PieceToChar[piece_on(sq)];
+      }
 
       if (rank > RANK_1)
           ss << '/';
@@ -365,22 +359,22 @@ const string Position::fen() const {
   ss << (sideToMove == WHITE ? " w " : " b ");
 
   if (can_castle(WHITE_OO))
-      ss << (chess960 ? char(toupper(file_to_char(file_of(castle_rook_square(WHITE, KING_SIDE))))) : 'K');
+      ss << (chess960 ? file_to_char(file_of(castle_rook_square(WHITE,  KING_SIDE)), false) : 'K');
 
   if (can_castle(WHITE_OOO))
-      ss << (chess960 ? char(toupper(file_to_char(file_of(castle_rook_square(WHITE, QUEEN_SIDE))))) : 'Q');
+      ss << (chess960 ? file_to_char(file_of(castle_rook_square(WHITE, QUEEN_SIDE)), false) : 'Q');
 
   if (can_castle(BLACK_OO))
-      ss << (chess960 ? file_to_char(file_of(castle_rook_square(BLACK, KING_SIDE))) : 'k');
+      ss << (chess960 ? file_to_char(file_of(castle_rook_square(BLACK,  KING_SIDE)),  true) : 'k');
 
   if (can_castle(BLACK_OOO))
-      ss << (chess960 ? file_to_char(file_of(castle_rook_square(BLACK, QUEEN_SIDE))) : 'q');
+      ss << (chess960 ? file_to_char(file_of(castle_rook_square(BLACK, QUEEN_SIDE)),  true) : 'q');
 
   if (st->castleRights == CASTLES_NONE)
       ss << '-';
 
   ss << (ep_square() == SQ_NONE ? " - " : " " + square_to_string(ep_square()) + " ")
-      << st->rule50 << " " << 1 + (startPosPly - int(sideToMove == BLACK)) / 2;
+      << st->rule50 << " " << 1 + (gamePly - int(sideToMove == BLACK)) / 2;
 
   return ss.str();
 }
@@ -407,7 +401,8 @@ const string Position::pretty(Move move) const {
       if (piece_on(sq) != NO_PIECE)
           brd[513 - 68*rank_of(sq) + 4*file_of(sq)] = PieceToChar[piece_on(sq)];
 
-  ss << brd << "\nFen: " << fen() << "\nKey: " << st->key << "\nCheckers: ";
+  ss << brd << "\nFen: " << fen() << "\nKey: " << std::hex << std::uppercase
+     << std::setfill('0') << std::setw(16) << st->key << "\nCheckers: ";
 
   for (Bitboard b = checkers(); b; )
       ss << square_to_string(pop_lsb(&b)) << " ";
@@ -742,17 +737,11 @@ void Position::do_move(Move m, StateInfo& newSt, const CheckInfo& ci, bool moveI
   // Update side to move
   k ^= Zobrist::side;
 
-  // Increment the 50 moves rule draw counter. Resetting it to zero in the
-  // case of a capture or a pawn move is taken care of later.
+  // Increment ply counters.In particular rule50 will be later reset it to zero
+  // in case of a capture or a pawn move.
+  gamePly++;
   st->rule50++;
   st->pliesFromNull++;
-
-  if (type_of(m) == CASTLE)
-  {
-      st->key = k;
-      do_castle_move<true>(m);
-      return;
-  }
 
   Color us = sideToMove;
   Color them = ~us;
@@ -763,8 +752,24 @@ void Position::do_move(Move m, StateInfo& newSt, const CheckInfo& ci, bool moveI
   PieceType capture = type_of(m) == ENPASSANT ? PAWN : type_of(piece_on(to));
 
   assert(color_of(piece) == us);
-  assert(piece_on(to) == NO_PIECE || color_of(piece_on(to)) == them);
+  assert(piece_on(to) == NO_PIECE || color_of(piece_on(to)) == them || type_of(m) == CASTLE);
   assert(capture != KING);
+
+  if (type_of(m) == CASTLE)
+  {
+      assert(piece == make_piece(us, KING));
+
+      bool kingSide = to > from;
+      Square rfrom = to; // Castle is encoded as "king captures friendly rook"
+      Square rto = relative_square(us, kingSide ? SQ_F1 : SQ_D1);
+      to = relative_square(us, kingSide ? SQ_G1 : SQ_C1);
+      capture = NO_PIECE_TYPE;
+
+      do_castle(from, to, rfrom, rto);
+
+      st->psqScore += psq_delta(make_piece(us, ROOK), rfrom, rto);
+      k ^= Zobrist::psq[us][ROOK][rfrom] ^ Zobrist::psq[us][ROOK][rto];
+  }
 
   if (capture)
   {
@@ -800,7 +805,7 @@ void Position::do_move(Move m, StateInfo& newSt, const CheckInfo& ci, bool moveI
       // Update piece list, move the last piece at index[capsq] position and
       // shrink the list.
       //
-      // WARNING: This is a not revresible operation. When we will reinsert the
+      // WARNING: This is a not reversible operation. When we will reinsert the
       // captured piece in undo_move() we will put it at the end of the list and
       // not in its original place, it means index[] and pieceList[] are not
       // guaranteed to be invariant to a do_move() + undo_move() sequence.
@@ -809,9 +814,10 @@ void Position::do_move(Move m, StateInfo& newSt, const CheckInfo& ci, bool moveI
       pieceList[them][capture][index[lastSquare]] = lastSquare;
       pieceList[them][capture][pieceCount[them][capture]] = SQ_NONE;
 
-      // Update hash keys
+      // Update material hash key and prefetch access to materialTable
       k ^= Zobrist::psq[them][capture][capsq];
       st->materialKey ^= Zobrist::psq[them][capture][pieceCount[them][capture]];
+      prefetch((char*)thisThread->materialTable[st->materialKey]);
 
       // Update incremental scores
       st->psqScore -= pieceSquareTable[make_piece(them, capture)][capsq];
@@ -838,22 +844,25 @@ void Position::do_move(Move m, StateInfo& newSt, const CheckInfo& ci, bool moveI
       st->castleRights &= ~cr;
   }
 
-  // Prefetch TT access as soon as we know key is updated
+  // Prefetch TT access as soon as we know the new hash key
   prefetch((char*)TT.first_entry(k));
 
-  // Move the piece
-  Bitboard from_to_bb = SquareBB[from] ^ SquareBB[to];
-  byTypeBB[ALL_PIECES] ^= from_to_bb;
-  byTypeBB[pt] ^= from_to_bb;
-  byColorBB[us] ^= from_to_bb;
+  // Move the piece. The tricky Chess960 castle is handled earlier
+  if (type_of(m) != CASTLE)
+  {
+      Bitboard from_to_bb = SquareBB[from] ^ SquareBB[to];
+      byTypeBB[ALL_PIECES] ^= from_to_bb;
+      byTypeBB[pt] ^= from_to_bb;
+      byColorBB[us] ^= from_to_bb;
 
-  board[to] = board[from];
-  board[from] = NO_PIECE;
+      board[from] = NO_PIECE;
+      board[to] = piece;
 
-  // Update piece lists, index[from] is not updated and becomes stale. This
-  // works as long as index[] is accessed just by known occupied squares.
-  index[to] = index[from];
-  pieceList[us][pt][index[to]] = to;
+      // Update piece lists, index[from] is not updated and becomes stale. This
+      // works as long as index[] is accessed just by known occupied squares.
+      index[to] = index[from];
+      pieceList[us][pt][index[to]] = to;
+  }
 
   // If the moving piece is a pawn do some special extra work
   if (pt == PAWN)
@@ -901,16 +910,13 @@ void Position::do_move(Move m, StateInfo& newSt, const CheckInfo& ci, bool moveI
           st->npMaterial[us] += PieceValue[MG][promotion];
       }
 
-      // Update pawn hash key
+      // Update pawn hash key and prefetch access to pawnsTable
       st->pawnKey ^= Zobrist::psq[us][PAWN][from] ^ Zobrist::psq[us][PAWN][to];
+      prefetch((char*)thisThread->pawnsTable[st->pawnKey]);
 
       // Reset rule 50 draw counter
       st->rule50 = 0;
   }
-
-  // Prefetch pawn and material hash tables
-  prefetch((char*)thisThread->pawnsTable[st->pawnKey]);
-  prefetch((char*)thisThread->materialTable[st->materialKey]);
 
   // Update incremental scores
   st->psqScore += psq_delta(piece, from, to);
@@ -961,22 +967,14 @@ void Position::undo_move(Move m) {
 
   sideToMove = ~sideToMove;
 
-  if (type_of(m) == CASTLE)
-  {
-      do_castle_move<false>(m);
-      return;
-  }
-
   Color us = sideToMove;
   Color them = ~us;
   Square from = from_sq(m);
   Square to = to_sq(m);
-  Piece piece = piece_on(to);
-  PieceType pt = type_of(piece);
+  PieceType pt = type_of(piece_on(to));
   PieceType capture = st->capturedType;
 
-  assert(is_empty(from));
-  assert(color_of(piece) == us);
+  assert(is_empty(from) || type_of(m) == CASTLE);
   assert(capture != KING);
 
   if (type_of(m) == PROMOTION)
@@ -1004,19 +1002,32 @@ void Position::undo_move(Move m) {
       pt = PAWN;
   }
 
-  // Put the piece back at the source square
-  Bitboard from_to_bb = SquareBB[from] ^ SquareBB[to];
-  byTypeBB[ALL_PIECES] ^= from_to_bb;
-  byTypeBB[pt] ^= from_to_bb;
-  byColorBB[us] ^= from_to_bb;
+  if (type_of(m) == CASTLE)
+  {
+      bool kingSide = to > from;
+      Square rfrom = to; // Castle is encoded as "king captures friendly rook"
+      Square rto = relative_square(us, kingSide ? SQ_F1 : SQ_D1);
+      to = relative_square(us, kingSide ? SQ_G1 : SQ_C1);
+      capture = NO_PIECE_TYPE;
+      pt = KING;
+      do_castle(to, from, rto, rfrom);
+  }
+  else
+  {
+      // Put the piece back at the source square
+      Bitboard from_to_bb = SquareBB[from] ^ SquareBB[to];
+      byTypeBB[ALL_PIECES] ^= from_to_bb;
+      byTypeBB[pt] ^= from_to_bb;
+      byColorBB[us] ^= from_to_bb;
 
-  board[from] = board[to];
-  board[to] = NO_PIECE;
+      board[to] = NO_PIECE;
+      board[from] = make_piece(us, pt);
 
-  // Update piece lists, index[to] is not updated and becomes stale. This
-  // works as long as index[] is accessed just by known occupied squares.
-  index[from] = index[to];
-  pieceList[us][pt][index[from]] = from;
+      // Update piece lists, index[to] is not updated and becomes stale. This
+      // works as long as index[] is accessed just by known occupied squares.
+      index[from] = index[to];
+      pieceList[us][pt][index[from]] = from;
+  }
 
   if (capture)
   {
@@ -1046,49 +1057,18 @@ void Position::undo_move(Move m) {
 
   // Finally point our state pointer back to the previous state
   st = st->previous;
+  gamePly--;
 
   assert(pos_is_ok());
 }
 
 
-/// Position::do_castle_move() is a private method used to do/undo a castling
-/// move. Note that castling moves are encoded as "king captures friendly rook"
-/// moves, for instance white short castling in a non-Chess960 game is encoded
-/// as e1h1.
-template<bool Do>
-void Position::do_castle_move(Move m) {
+/// Position::do_castle() is a helper used to do/undo a castling move. This
+/// is a bit tricky, especially in Chess960.
 
-  assert(is_ok(m));
-  assert(type_of(m) == CASTLE);
-
-  Square kto, kfrom, rfrom, rto, kAfter, rAfter;
+void Position::do_castle(Square kfrom, Square kto, Square rfrom, Square rto) {
 
   Color us = sideToMove;
-  Square kBefore = from_sq(m);
-  Square rBefore = to_sq(m);
-
-  // Find after-castle squares for king and rook
-  if (rBefore > kBefore) // O-O
-  {
-      kAfter = relative_square(us, SQ_G1);
-      rAfter = relative_square(us, SQ_F1);
-  }
-  else // O-O-O
-  {
-      kAfter = relative_square(us, SQ_C1);
-      rAfter = relative_square(us, SQ_D1);
-  }
-
-  kfrom = Do ? kBefore : kAfter;
-  rfrom = Do ? rBefore : rAfter;
-
-  kto = Do ? kAfter : kBefore;
-  rto = Do ? rAfter : rBefore;
-
-  assert(piece_on(kfrom) == make_piece(us, KING));
-  assert(piece_on(rfrom) == make_piece(us, ROOK));
-
-  // Move the pieces, with some care; in chess960 could be kto == rfrom
   Bitboard k_from_to_bb = SquareBB[kfrom] ^ SquareBB[kto];
   Bitboard r_from_to_bb = SquareBB[rfrom] ^ SquareBB[rto];
   byTypeBB[KING] ^= k_from_to_bb;
@@ -1096,98 +1076,56 @@ void Position::do_castle_move(Move m) {
   byTypeBB[ALL_PIECES] ^= k_from_to_bb ^ r_from_to_bb;
   byColorBB[us] ^= k_from_to_bb ^ r_from_to_bb;
 
-  // Update board
-  Piece king = make_piece(us, KING);
-  Piece rook = make_piece(us, ROOK);
+  // Could be from == to, so first set NO_PIECE then KING and ROOK
   board[kfrom] = board[rfrom] = NO_PIECE;
-  board[kto] = king;
-  board[rto] = rook;
+  board[kto] = make_piece(us, KING);
+  board[rto] = make_piece(us, ROOK);
 
-  // Update piece lists
-  pieceList[us][KING][index[kfrom]] = kto;
-  pieceList[us][ROOK][index[rfrom]] = rto;
-  int tmp = index[rfrom]; // In Chess960 could be kto == rfrom
-  index[kto] = index[kfrom];
-  index[rto] = tmp;
-
-  if (Do)
-  {
-      // Reset capture field
-      st->capturedType = NO_PIECE_TYPE;
-
-      // Update incremental scores
-      st->psqScore += psq_delta(king, kfrom, kto);
-      st->psqScore += psq_delta(rook, rfrom, rto);
-
-      // Update hash key
-      st->key ^= Zobrist::psq[us][KING][kfrom] ^ Zobrist::psq[us][KING][kto];
-      st->key ^= Zobrist::psq[us][ROOK][rfrom] ^ Zobrist::psq[us][ROOK][rto];
-
-      // Clear en passant square
-      if (st->epSquare != SQ_NONE)
-      {
-          st->key ^= Zobrist::enpassant[file_of(st->epSquare)];
-          st->epSquare = SQ_NONE;
-      }
-
-      // Update castling rights
-      st->key ^= Zobrist::castle[st->castleRights & castleRightsMask[kfrom]];
-      st->castleRights &= ~castleRightsMask[kfrom];
-
-      // Update checkers BB
-      st->checkersBB = attackers_to(king_square(~us)) & pieces(us);
-
-      sideToMove = ~sideToMove;
-  }
-  else
-      // Undo: point our state pointer back to the previous state
-      st = st->previous;
-
-  assert(pos_is_ok());
+  // Could be kfrom == rto, so use a 'tmp' variable
+  int tmp = index[kfrom];
+  index[rto] = index[rfrom];
+  index[kto] = tmp;
+  pieceList[us][KING][index[kto]] = kto;
+  pieceList[us][ROOK][index[rto]] = rto;
 }
 
 
-/// Position::do_null_move() is used to do/undo a "null move": It flips the side
-/// to move and updates the hash key without executing any move on the board.
-template<bool Do>
-void Position::do_null_move(StateInfo& backupSt) {
+/// Position::do(undo)_null_move() is used to do(undo) a "null move": It flips
+/// the side to move without executing any move on the board.
+
+void Position::do_null_move(StateInfo& newSt) {
 
   assert(!checkers());
 
-  // Back up the information necessary to undo the null move to the supplied
-  // StateInfo object. Note that differently from normal case here backupSt
-  // is actually used as a backup storage not as the new state. This reduces
-  // the number of fields to be copied.
-  StateInfo* src = Do ? st : &backupSt;
-  StateInfo* dst = Do ? &backupSt : st;
+  memcpy(&newSt, st, sizeof(StateInfo)); // Fully copy here
 
-  dst->key      = src->key;
-  dst->epSquare = src->epSquare;
-  dst->psqScore = src->psqScore;
-  dst->rule50   = src->rule50;
-  dst->pliesFromNull = src->pliesFromNull;
+  newSt.previous = st;
+  st = &newSt;
+
+  if (st->epSquare != SQ_NONE)
+  {
+      st->key ^= Zobrist::enpassant[file_of(st->epSquare)];
+      st->epSquare = SQ_NONE;
+  }
+
+  st->key ^= Zobrist::side;
+  prefetch((char*)TT.first_entry(st->key));
+
+  st->rule50++;
+  st->pliesFromNull = 0;
 
   sideToMove = ~sideToMove;
-
-  if (Do)
-  {
-      if (st->epSquare != SQ_NONE)
-          st->key ^= Zobrist::enpassant[file_of(st->epSquare)];
-
-      st->key ^= Zobrist::side;
-      prefetch((char*)TT.first_entry(st->key));
-
-      st->epSquare = SQ_NONE;
-      st->rule50++;
-      st->pliesFromNull = 0;
-  }
 
   assert(pos_is_ok());
 }
 
-// Explicit template instantiations
-template void Position::do_null_move<false>(StateInfo& backupSt);
-template void Position::do_null_move<true>(StateInfo& backupSt);
+void Position::undo_null_move() {
+
+  assert(!checkers());
+
+  st = st->previous;
+  sideToMove = ~sideToMove;
+}
 
 
 /// Position::see() is a static exchange evaluator: It tries to estimate the
@@ -1429,31 +1367,36 @@ Value Position::compute_non_pawn_material(Color c) const {
 /// Position::is_draw() tests whether the position is drawn by material,
 /// repetition, or the 50 moves rule. It does not detect stalemates, this
 /// must be done by the search.
-template<bool CheckRepetition, bool CheckThreeFold>
+template<bool SkipRepetition>
 bool Position::is_draw() const {
 
+  // Draw by material?
   if (   !pieces(PAWN)
       && (non_pawn_material(WHITE) + non_pawn_material(BLACK) <= BishopValueMg))
       return true;
 
+  // Draw by the 50 moves rule?
   if (st->rule50 > 99 && (!checkers() || MoveList<LEGAL>(*this).size()))
       return true;
 
-  if (CheckRepetition)
+  // Draw by repetition?
+  if (!SkipRepetition)
   {
-      int i = 4, e = std::min(st->rule50, st->pliesFromNull), cnt;
+      int i = 4, e = std::min(st->rule50, st->pliesFromNull);
 
       if (i <= e)
       {
           StateInfo* stp = st->previous->previous;
 
-          for (cnt = 0; i <= e; i += 2)
-          {
+          do {
               stp = stp->previous->previous;
 
-              if (stp->key == st->key && (!CheckThreeFold || ++cnt >= 2))
+              if (stp->key == st->key)
                   return true;
-          }
+
+              i += 2;
+
+          } while (i <= e);
       }
   }
 
@@ -1461,9 +1404,8 @@ bool Position::is_draw() const {
 }
 
 // Explicit template instantiations
-template bool Position::is_draw<true,  true>() const;
-template bool Position::is_draw<true, false>() const;
-template bool Position::is_draw<false,false>() const;
+template bool Position::is_draw<false>() const;
+template bool Position::is_draw<true>() const;
 
 
 /// Position::flip() flips position with the white and black sides reversed. This
@@ -1479,7 +1421,7 @@ void Position::flip() {
   thisThread = pos.this_thread();
   nodes = pos.nodes_searched();
   chess960 = pos.is_chess960();
-  startPosPly = pos.startpos_ply_counter();
+  gamePly = pos.game_ply();
 
   for (Square s = SQ_A1; s <= SQ_H8; s++)
       if (!pos.is_empty(s))

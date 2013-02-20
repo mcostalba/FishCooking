@@ -1,7 +1,7 @@
 /*
   Stockfish, a UCI chess playing engine derived from Glaurung 2.1
   Copyright (C) 2004-2008 Tord Romstad (Glaurung author)
-  Copyright (C) 2008-2012 Marco Costalba, Joona Kiiski, Tord Romstad
+  Copyright (C) 2008-2013 Marco Costalba, Joona Kiiski, Tord Romstad
 
   Stockfish is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -199,21 +199,21 @@ Value Endgame<KPK>::operator()(const Position& pos) const {
   assert(pos.piece_count(weakerSide, PAWN) == 0);
 
   Square wksq, bksq, wpsq;
-  Color stm;
+  Color us;
 
   if (strongerSide == WHITE)
   {
       wksq = pos.king_square(WHITE);
       bksq = pos.king_square(BLACK);
       wpsq = pos.piece_list(WHITE, PAWN)[0];
-      stm = pos.side_to_move();
+      us   = pos.side_to_move();
   }
   else
   {
       wksq = ~pos.king_square(BLACK);
       bksq = ~pos.king_square(WHITE);
       wpsq = ~pos.piece_list(BLACK, PAWN)[0];
-      stm  = ~pos.side_to_move();
+      us   = ~pos.side_to_move();
   }
 
   if (file_of(wpsq) >= FILE_E)
@@ -223,7 +223,7 @@ Value Endgame<KPK>::operator()(const Position& pos) const {
       wpsq = mirror(wpsq);
   }
 
-  if (!Bitbases::probe_kpk(wksq, wpsq, bksq, stm))
+  if (!Bitbases::probe_kpk(wksq, wpsq, bksq, us))
       return VALUE_DRAW;
 
   Value result = VALUE_KNOWN_WIN + PawnValueEg + Value(rank_of(wpsq));
@@ -471,6 +471,29 @@ ScaleFactor Endgame<KBPsK>::operator()(const Position& pos) const {
               return SCALE_FACTOR_DRAW;
       }
   }
+
+  // All pawns on same B or G file? Then potential draw
+  if (    (pawnFile == FILE_B || pawnFile == FILE_G)
+      && !(pos.pieces(PAWN) & ~file_bb(pawnFile))
+      && pos.non_pawn_material(weakerSide) == 0
+      && pos.piece_count(weakerSide, PAWN) >= 1)
+  {
+      // Get weaker pawn closest to opponent's queening square
+      Bitboard wkPawns = pos.pieces(weakerSide, PAWN);
+      Square weakerPawnSq = strongerSide == WHITE ? msb(wkPawns) : lsb(wkPawns);
+
+      Square strongerKingSq = pos.king_square(strongerSide);
+      Square weakerKingSq = pos.king_square(weakerSide);
+      Square bishopSq = pos.piece_list(strongerSide, BISHOP)[0];
+
+      // Draw if weaker pawn is on rank 7, bishop can't attack the pawn, and
+      // weaker king can stop opposing opponent's king from penetrating.
+      if (   relative_rank(strongerSide, weakerPawnSq) == RANK_7
+          && opposite_colors(bishopSq, weakerPawnSq)
+          && square_distance(weakerPawnSq, weakerKingSq) <= square_distance(weakerPawnSq, strongerKingSq))
+          return SCALE_FACTOR_DRAW;
+  }
+
   return SCALE_FACTOR_NONE;
 }
 
@@ -897,14 +920,14 @@ ScaleFactor Endgame<KPKP>::operator()(const Position& pos) const {
   Square wksq = pos.king_square(strongerSide);
   Square bksq = pos.king_square(weakerSide);
   Square wpsq = pos.piece_list(strongerSide, PAWN)[0];
-  Color stm = pos.side_to_move();
+  Color us = pos.side_to_move();
 
   if (strongerSide == BLACK)
   {
       wksq = ~wksq;
       bksq = ~bksq;
       wpsq = ~wpsq;
-      stm  = ~stm;
+      us   = ~us;
   }
 
   if (file_of(wpsq) >= FILE_E)
@@ -922,5 +945,5 @@ ScaleFactor Endgame<KPKP>::operator()(const Position& pos) const {
 
   // Probe the KPK bitbase with the weakest side's pawn removed. If it's a draw,
   // it's probably at least a draw even with the pawn.
-  return Bitbases::probe_kpk(wksq, wpsq, bksq, stm) ? SCALE_FACTOR_NONE : SCALE_FACTOR_DRAW;
+  return Bitbases::probe_kpk(wksq, wpsq, bksq, us) ? SCALE_FACTOR_NONE : SCALE_FACTOR_DRAW;
 }

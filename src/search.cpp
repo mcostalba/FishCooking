@@ -1232,16 +1232,14 @@ split_point_start: // At split points actual search starts from here
       }
 
       // Detect non-capture evasions that are candidate to be pruned
-      evasionPrunable =   !PvNode
-                       &&  InCheck
+      evasionPrunable =    InCheck 
+                       &&  depth < -ONE_PLY
                        &&  bestValue > VALUE_MATED_IN_MAX_PLY
                        && !pos.is_capture(move)
                        && !pos.can_castle(pos.side_to_move());
 
       // Don't search moves with negative SEE values
-      if (   !PvNode
-          && (!InCheck || evasionPrunable)
-          &&  move != ttMove
+      if (  (!InCheck || evasionPrunable)
           &&  type_of(move) != PROMOTION
           &&  pos.see_sign(move) < 0)
           continue;

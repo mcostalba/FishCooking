@@ -588,9 +588,11 @@ Value do_evaluate(const Position& pos, Value& margin) {
         // Otherwise give a bonus if we are a bishop and can pin a piece or
         // can give a discovered check through an x-ray attack.
         else if (    (Piece == BISHOP || Piece == ROOK)
-                 && (PseudoAttacks[Piece][pos.king_square(Them)] & s)
-                 && !more_than_one(BetweenBB[s][pos.king_square(Them)] & pos.pieces()))
+                 && (PseudoAttacks[Piece][pos.king_square(Them)] & s)) {
+            Bitboard between = BetweenBB[s][pos.king_square(Them)] & pos.pieces();
+            if (!more_than_one(between) && (between & ~pos.pieces(PAWN)))
                  score += Piece == BISHOP ? BishopPinBonus : RookPinBonus;
+        }
 
         // Bishop and knight outposts squares
         if (    (Piece == BISHOP || Piece == KNIGHT)

@@ -472,11 +472,6 @@ namespace {
     }
   }
 
-  bool safeNull(const Position &pos, Depth depth) {
-      return pos.non_pawn_material(pos.side_to_move())
-         && (depth > 8 * ONE_PLY || !pos.all_check_blockers());
-  }
-
   // search<>() is the main search function for both PV and non-PV nodes and for
   // normal and SplitPoint nodes. When called just after a split point the search
   // is simpler because we have already probed the hash table, done a null move
@@ -653,7 +648,7 @@ namespace {
         && !inCheck
         &&  eval - FutilityMargins[depth][0] >= beta
         &&  abs(beta) < VALUE_MATE_IN_MAX_PLY
-        &&  safeNull(pos, depth))
+        &&  pos.non_pawn_material(pos.side_to_move()))
         return eval - FutilityMargins[depth][0];
 
     // Step 8. Null move search with verification search (is omitted in PV nodes)
@@ -663,7 +658,8 @@ namespace {
         && !inCheck
         &&  eval >= beta
         &&  abs(beta) < VALUE_MATE_IN_MAX_PLY
-        &&  safeNull(pos, depth))
+        && pos.non_pawn_material(pos.side_to_move())
+        && (depth > 8 * ONE_PLY || !pos.all_check_blockers()))
     {
         ss->currentMove = MOVE_NULL;
 

@@ -455,8 +455,8 @@ Value do_evaluate(const Position& pos, Value& margin) {
            sf = ScaleFactor(50);
   }
 
-  // Scale endgame score with game ply, around 1% every 10 plies
-  score = make_score(mg_value(score), eg_value(score) * (1024 - pos.game_ply()) / 1024);
+  // Scale midgame score with game ply, around 1% every 10 plies
+  score = make_score(mg_value(score) * (1024 - pos.game_ply()) / 1024, eg_value(score));
 
   margin = margins[pos.side_to_move()];
   Value v = interpolate(score, ei.mi->game_phase(), sf);

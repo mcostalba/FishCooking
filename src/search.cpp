@@ -444,11 +444,9 @@ namespace {
             // Stop search early if one move seems to be much better than others
             if (    depth >= 12
                 && !stop
-                &&  PVSize == 1
-                && (   (bestMoveNeverChanged &&  pos.captured_piece_type())
-                    || Time::now() - SearchTime > (TimeMgr.available_time() * 40) / 100))
+                &&  PVSize == 1)
             {
-                Value rBeta = bestValue - 2 * PawnValueMg;
+                Value rBeta = bestValue - (bestMoveNeverChanged && pos.captured_piece_type()) ? PawnValueMg : 4 * PawnValueMg;
                 (ss+1)->excludedMove = RootMoves[0].pv[0];
                 (ss+1)->skipNullMove = true;
                 Value v = search<NonPV>(pos, ss+1, rBeta - 1, rBeta, (depth - 3) * ONE_PLY);

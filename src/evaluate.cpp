@@ -164,8 +164,15 @@ namespace {
   const Score QueenOnPawnBonus = make_score(1, 40);
 
   // Rooks on open files (modified by Joona Kiiski)
-  const Score RookOpenFileBonus     = make_score(43, 21);
-  const Score RookHalfOpenFileBonus = make_score(19, 10);
+  const Score RookOpenFileBonus     = make_score(45, 25);
+  const Score RookOpenKingfileBonus = make_score(45,  0);
+  const Score RookHalfOpenFileBonus = make_score(20, 10);
+  
+  // Bonus for rook supporting a pawn that is not opposed 
+  const Score RookAndPotentialCandidateBonus = make_score(15, 10);
+  
+  // Rooks defending each other
+  const Score ConnectedRooksBonus = make_score(15, 10);  
 
   // Penalty for rooks trapped inside a friendly king which has lost the
   // right to castle.
@@ -199,7 +206,7 @@ namespace {
   //
   // King safety evaluation is asymmetrical and different for us (root color)
   // and for our opponent. These values are used to init KingDangerTable.
-  const int KingDangerWeights[] = { 259, 247 };
+  const int KingDangerWeights[] = { 255, 255 };
 
   // KingAttackWeights[PieceType] contains king attack weights by piece type
   const int KingAttackWeights[] = { 0, 0, 2, 2, 3, 5 };
@@ -419,7 +426,8 @@ Value do_evaluate(const Position& pos, Value& margin) {
   score +=  evaluate_passed_pawns<WHITE>(pos, ei)
           - evaluate_passed_pawns<BLACK>(pos, ei);
 
-  // If one side has only a king, check whether exists any unstoppable passed pawn
+  // If one or both sides have no pieces other than pawns, try to determine
+  // if one or more of those pawns are unstoppable.
   if (!pos.non_pawn_material(WHITE) || !pos.non_pawn_material(BLACK))
       score += evaluate_unstoppable_pawns(pos, ei);
 
@@ -430,7 +438,8 @@ Value do_evaluate(const Position& pos, Value& margin) {
       score += apply_weight(make_score(s * ei.mi->space_weight(), 0), Weights[Space]);
   }
 
-  // Scale winning side if position is more drawish that what it appears
+  // Scale winning side if position is more drawish than it would
+  // appear from the result returned by the normal static evaluation
   ScaleFactor sf = eg_value(score) > VALUE_DRAW ? ei.mi->scale_factor(pos, WHITE)
                                                 : ei.mi->scale_factor(pos, BLACK);
 
@@ -543,6 +552,7 @@ Value do_evaluate(const Position& pos, Value& margin) {
     Bitboard b;
     Square s, ksq;
     int mob;
+    bool connectedRooks = false;
     File f;
     Score score = SCORE_ZERO;
 
@@ -562,18 +572,34 @@ Value do_evaluate(const Position& pos, Value& margin) {
             b = attacks_bb<ROOK>(s, pos.pieces() ^ pos.pieces(Us, ROOK, QUEEN));
         else
             assert(false);
-
-        ei.attackedBy[Us][Piece] |= b;
-
+		
+				// Update attack info
+		    ei.attackedBy[Us][Piece] |= b;
+				
+				// King attack counters, used for local king safety
+				// adjustments, possibly later to adjust mobility
+				int kingAttackCount = 0, kingDefenceCount = 0;
+				
+				// King attacks
         if (b & ei.kingRing[Them])
         {
             ei.kingAttackersCount[Us]++;
             ei.kingAttackersWeight[Us] += KingAttackWeights[Piece];
             Bitboard bb = (b & ei.attackedBy[Them][KING]);
             if (bb)
-                ei.kingAdjacentZoneAttacksCount[Us] += popcount<Max15>(bb);
+			      {
+			      	  kingAttackCount = popcount<Max15>(bb);
+                ei.kingAdjacentZoneAttacksCount[Us] += kingAttackCount;
+			      }
         }
-
+        else
+        {
+        		kingDefenceCount = popcount<Max15>(b & ei.attackedBy[Us][KING]);
+	        	if (kingDefenceCount > 0)
+	        	    score += make_score(KingAttackWeights[Piece]*3, 0);
+        }
+		
+				// Mobility
         mob = (Piece != QUEEN ? popcount<Max15>(b & mobilityArea)
                               : popcount<Full >(b & mobilityArea));
 
@@ -595,19 +621,41 @@ Value do_evaluate(const Position& pos, Value& margin) {
         if (    (Piece == BISHOP || Piece == KNIGHT)
             && !(pos.pieces(Them, PAWN) & attack_span_mask(Us, s)))
             score += evaluate_outposts<Piece, Us>(pos, ei, s);
-
-        if ((Piece == ROOK || Piece == QUEEN) && relative_rank(Us, s) >= RANK_5)
+		
+		    // Queen or rook on 7th rank
+        if (Piece == ROOK || Piece == QUEEN)
         {
-            // Major piece on 7th rank
-            if (   relative_rank(Us, s) == RANK_7
-                && relative_rank(Us, pos.king_square(Them)) == RANK_8)
-                score += (Piece == ROOK ? RookOn7thBonus : QueenOn7thBonus);
+						if (relative_rank(Us, s) >= RANK_5)
+						{
+								// Major piece on 7th rank
+								bool on7thRank = false;
+								if (    relative_rank(Us, s) == RANK_7
+										&& (relative_rank(Us, pos.king_square(Them)) == RANK_8 || kingAttackCount > 0))
+								{
+										on7thRank = true;
+										score += (Piece == ROOK ? RookOn7thBonus + make_score(kingAttackCount*4, 0)
+																				 		: QueenOn7thBonus + make_score(kingAttackCount*6, 0));
+								}
 
-            // Major piece attacking pawns on the same rank
-            Bitboard pawns = pos.pieces(Them, PAWN) & rank_bb(s);
-            if (pawns)
-                score += (Piece == ROOK ? RookOnPawnBonus
-                                        : QueenOnPawnBonus) * popcount<Max15>(pawns);
+								// Major piece attacking pawns on the same rank			
+								Bitboard pawns = pos.pieces(Them, PAWN) & rank_bb(s);
+								if (pawns)
+								{
+										int pawnNumber = popcount<Max15>(pawns);
+										score += (Piece == ROOK ? RookOnPawnBonus
+										: QueenOnPawnBonus) * pawnNumber + make_score(kingAttackCount * pawnNumber, on7thRank ? 10 : 0);
+								}
+								
+						}
+			
+						// Rook protected by rook?
+						if (Piece == ROOK && (ei.attackedBy[Us][ROOK] & s))
+						{
+								connectedRooks = true;
+								score += ConnectedRooksBonus;								
+						}
+						else
+								connectedRooks = false;
         }
 
         // Special extra evaluation for bishops
@@ -639,14 +687,23 @@ Value do_evaluate(const Position& pos, Value& margin) {
             if (ei.pi->file_is_half_open(Us, f))
             {
                 if (ei.pi->file_is_half_open(Them, f))
+								{
                     score += RookOpenFileBonus;
+										if (kingAttackCount > 0)
+												score += RookOpenKingfileBonus;
+								}
                 else
                     score += RookHalfOpenFileBonus;
             }
+						else
+						{
+								if (ei.pi->file_is_half_open(Them, f))
+										score += RookAndPotentialCandidateBonus;
+						}
 
             // Penalize rooks which are trapped inside a king. Penalize more if
             // king has lost right to castle.
-            if (mob > 6 || ei.pi->file_is_half_open(Us, f))
+            if (connectedRooks || mob > 6 || ei.pi->file_is_half_open(Us, f))
                 continue;
 
             ksq = pos.king_square(Us);

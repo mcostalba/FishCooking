@@ -554,12 +554,14 @@ Value do_evaluate(const Position& pos, Value& margin) {
     while ((s = *pl++) != SQ_NONE)
     {
         // Find attacked squares, including x-ray attacks for bishops and rooks
-        if (Piece == KNIGHT || Piece == QUEEN)
+        if (Piece == KNIGHT)
             b = pos.attacks_from<Piece>(s);
         else if (Piece == BISHOP)
-            b = attacks_bb<BISHOP>(s, pos.pieces() ^ pos.pieces(Us, QUEEN));
+            b = attacks_bb<BISHOP>(s, pos.pieces() ^ pos.pieces(Us) ^ pos.pieces(Us, PAWN));
         else if (Piece == ROOK)
-            b = attacks_bb<ROOK>(s, pos.pieces() ^ pos.pieces(Us, ROOK, QUEEN));
+            b = attacks_bb<ROOK>(s, pos.pieces() ^ pos.pieces(Us) ^ pos.pieces(Us, PAWN));
+        else if (Piece == QUEEN)
+            b = attacks_bb<QUEEN>(s, pos.pieces() ^ pos.pieces(Us) ^ pos.pieces(Us, PAWN));
         else
             assert(false);
 

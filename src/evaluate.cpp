@@ -171,10 +171,9 @@ namespace {
   // right to castle.
   const Value TrappedRookPenalty = Value(180);
 
-  // Penalty for a bishop on a1/h1 (a8/h8 for black) which is trapped by
-  // a friendly pawn on b2/g2 (b7/g7 for black). This can obviously only
-  // happen in Chess960 games.
-  const Score TrappedBishopA1H1Penalty = make_score(100, 100);
+  // Penalty for a bishop on which is trapped in by friendly pawns, when
+  // on rank 1/2 (7/8 for black).
+  const Score TrappedBishopPenalty = make_score(100, 100);
 
   // Penalty for an undefended bishop or knight
   const Score UndefendedMinorPenalty = make_score(25, 10);
@@ -611,22 +610,18 @@ Value do_evaluate(const Position& pos, Value& margin) {
         }
 
         // Special extra evaluation for bishops
-        if (Piece == BISHOP && pos.is_chess960())
+        if (Piece == BISHOP)
         {
-            // An important Chess960 pattern: A cornered bishop blocked by
-            // a friendly pawn diagonally in front of it is a very serious
-            // problem, especially when that pawn is also blocked.
-            if (s == relative_square(Us, SQ_A1) || s == relative_square(Us, SQ_H1))
-            {
-                Square d = pawn_push(Us) + (file_of(s) == FILE_A ? DELTA_E : DELTA_W);
-                if (pos.piece_on(s + d) == make_piece(Us, PAWN))
-                {
-                    if (!pos.is_empty(s + d + pawn_push(Us)))
-                        score -= 2*TrappedBishopA1H1Penalty;
-                    else if (pos.piece_on(s + 2*d) == make_piece(Us, PAWN))
-                        score -= TrappedBishopA1H1Penalty;
+            // Bishops on first or second rank, blocked in by pawns are very bad.
+            if (relative_rank(Us, s) == RANK_1 || relative_rank(Us, s) == RANK_2) {
+                Bitboard front = pos.attacks_from<PAWN>(s, Us) & pos.pieces(Us, PAWN);
+                // Blocked in on both sides by pawns?
+                if (front == pos.attacks_from<PAWN>(s, Us)) {
+                    front = (Us == WHITE ? front <<  8 : front >> 8);
+                    if (front & pos.pieces())
+                        score -= TrappedBishopPenalty;
                     else
-                        score -= TrappedBishopA1H1Penalty / 2;
+                        score -= TrappedBishopPenalty / 2;
                 }
             }
         }

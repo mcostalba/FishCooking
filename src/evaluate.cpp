@@ -199,13 +199,13 @@ namespace {
   //
   // King safety evaluation is asymmetrical and different for us (root color)
   // and for our opponent. These values are used to init KingDangerTable.
-  const int KingDangerWeights[] = { 259, 247 };
+  const int KingDangerWeights[] = { 240, 230 };
 
   // KingAttackWeights[PieceType] contains king attack weights by piece type
   const int KingAttackWeights[] = { 0, 0, 2, 2, 3, 5 };
 
   // Bonuses for enemy's safe checks
-  const int QueenContactCheckBonus = 6;
+  const int QueenContactCheckBonus = 5;
   const int RookContactCheckBonus  = 4;
   const int QueenCheckBonus        = 3;
   const int RookCheckBonus         = 2;

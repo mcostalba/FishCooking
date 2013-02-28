@@ -98,7 +98,7 @@ namespace {
      {}, {},
      { S(-38,-33), S(-25,-23), S(-12,-13), S( 0, -3), S(12,  7), S(25, 17), // Knights
        S( 31, 22), S( 38, 27), S( 38, 27) },
-     { S(-25,-30), S(-11,-16), S(  3, -2), S(17, 12), S(31, 26), S(45, 40), // Bishops
+     { S( -5,-10), S(  0, -6), S( 11,  6), S(21, 17), S(31, 26), S(45, 40), // Bishops
        S( 57, 52), S( 65, 60), S( 71, 65), S(74, 69), S(76, 71), S(78, 73),
        S( 79, 74), S( 80, 75), S( 81, 76), S(81, 76) },
      { S(-20,-36), S(-14,-19), S( -8, -3), S(-2, 13), S( 4, 29), S(10, 46), // Rooks
@@ -613,15 +613,17 @@ Value do_evaluate(const Position& pos, Value& margin) {
         if (Piece == BISHOP)
         {
             // Bishops on first or second rank, blocked in by pawns are very bad.
-            if (relative_rank(Us, s) == RANK_1 || relative_rank(Us, s) == RANK_2) {
+            if (relative_rank(Us, s) <= RANK_2) {
                 Bitboard front = pos.attacks_from<PAWN>(s, Us) & pos.pieces(Us, PAWN);
                 // Blocked in on both sides by pawns?
                 if (front == pos.attacks_from<PAWN>(s, Us)) {
-                    front = (Us == WHITE ? front <<  8 : front >> 8);
-                    if (front & pos.pieces())
+                    front = (Us == WHITE ? front <<  8 : front >> 8) & pos.pieces();
+                    if (more_than_one(front))
                         score -= TrappedBishopPenalty;
-                    else
+                    else if (front)
                         score -= TrappedBishopPenalty / 2;
+                    else
+                        score -= TrappedBishopPenalty / 4;
                 }
             }
         }

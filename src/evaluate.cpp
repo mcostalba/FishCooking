@@ -603,11 +603,13 @@ Value do_evaluate(const Position& pos, Value& margin) {
                 && relative_rank(Us, pos.king_square(Them)) == RANK_8)
                 score += (Piece == ROOK ? RookOn7thBonus : QueenOn7thBonus);
 
-            // Major piece attacking pawns on the same rank
-            Bitboard pawns = pos.pieces(Them, PAWN) & rank_bb(s);
-            if (pawns)
-                score += (Piece == ROOK ? RookOnPawnBonus
-                                        : QueenOnPawnBonus) * popcount<Max15>(pawns);
+            // Major piece attacking undefended pawns on the same rank
+            Bitboard pawns = pos.pieces(Them, PAWN) & rank_bb(s) & ~ei.attackedBy[Them][PAWN];
+            if (pawns) {
+                score += (Piece == ROOK ? RookOnPawnBonus : QueenOnPawnBonus);
+                if (more_than_one(pawns))
+                    score += (Piece == ROOK ? RookOnPawnBonus : QueenOnPawnBonus);
+            }
         }
 
         // Special extra evaluation for bishops

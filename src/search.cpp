@@ -445,7 +445,7 @@ namespace {
             if (    depth >= 12
                 && !stop
                 &&  PVSize == 1
-                && (bestMoveNeverChanged || (depth >= 16 || Time::now() - SearchTime > (TimeMgr.available_time() * 20) / 100)))
+                && (bestMoveNeverChanged || (Time::now() - SearchTime > (TimeMgr.available_time() * 20) / 100)))
             {
                 Value rBeta = bestValue - (pos.captured_piece_type() ? 2 * PawnValueMg : 4 * PawnValueMg);
                 (ss+1)->excludedMove = RootMoves[0].pv[0];

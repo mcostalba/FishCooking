@@ -44,6 +44,7 @@ namespace Search {
   Color RootColor;
   Time::point SearchTime;
   StateStackPtr SetupStates;
+  MovesVectPtr SetupMoves;
 }
 
 using std::string;
@@ -294,6 +295,7 @@ namespace {
     int depth, prevBestMoveChanges;
     Value bestValue, alpha, beta, delta;
     bool bestMoveNeverChanged = true;
+    bool triedEasyMove = false;
 
     memset(ss, 0, 4 * sizeof(Stack));
     depth = BestMoveChanges = 0;
@@ -441,13 +443,21 @@ namespace {
             if (Time::now() - SearchTime > (TimeMgr.available_time() * 62) / 100)
                 stop = true;
 
+            bool recapture =   pos.is_capture(RootMoves[0].pv[0])
+                            && pos.captured_piece_type()
+                            && SetupMoves->size()
+                            && to_sq(SetupMoves->back()) == to_sq(RootMoves[0].pv[0]);
+
             // Stop search early if one move seems to be much better than others
             if (    depth >= 12
+                && !triedEasyMove
                 && !stop
                 &&  PVSize == 1
                 && (bestMoveNeverChanged || (Time::now() - SearchTime > (TimeMgr.available_time() * 20) / 100)))
             {
-                Value rBeta = bestValue - (pos.captured_piece_type() ? 2 * PawnValueMg : 4 * PawnValueMg);
+                triedEasyMove = true;
+
+                Value rBeta = bestValue - (recapture ? 2 * PawnValueMg : 4 * PawnValueMg);
                 (ss+1)->excludedMove = RootMoves[0].pv[0];
                 (ss+1)->skipNullMove = true;
                 Value v = search<NonPV>(pos, ss+1, rBeta - 1, rBeta, (depth - 3) * ONE_PLY);

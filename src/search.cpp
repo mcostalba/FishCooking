@@ -822,14 +822,10 @@ split_point_start: // At split points actual search starts from here
       dangerous =   givesCheck
                  || pos.is_passed_pawn_push(move)
                  || type_of(move) == CASTLE
-                 || (   captureOrPromotion // Entering a pawn endgame?
-                     && type_of(pos.piece_on(to_sq(move))) != PAWN
-                     && type_of(move) == NORMAL
-                     && (  pos.non_pawn_material(WHITE) + pos.non_pawn_material(BLACK)
-                         - PieceValue[MG][pos.piece_on(to_sq(move))] == VALUE_ZERO));
+                 || captureOrPromotion;
 
       // Step 12. Extend checks and, in PV nodes, also dangerous moves
-      if (PvNode && dangerous)
+      if (PvNode && givesCheck)
           ext = ONE_PLY;
 
       else if (givesCheck && pos.see_sign(move) >= 0)
@@ -863,9 +859,8 @@ split_point_start: // At split points actual search starts from here
       newDepth = depth - ONE_PLY + ext;
 
       // Step 13. Futility pruning (is omitted in PV nodes)
-      if (   !captureOrPromotion
+      if (   !dangerous
           && !inCheck
-          && !dangerous
           &&  move != ttMove)
       {
           // Move count based pruning
@@ -925,7 +920,6 @@ split_point_start: // At split points actual search starts from here
       // re-searched at full depth.
       if (    depth > 3 * ONE_PLY
           && !pvMove
-          && !captureOrPromotion
           && !dangerous
           &&  move != ttMove
           &&  move != ss->killers[0]

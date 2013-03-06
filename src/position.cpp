@@ -420,12 +420,12 @@ const string Position::pretty(Move move) const {
 /// false, the function return the pieces of the given color candidate for a
 /// discovery check against the enemy king.
 template<bool FindPinned>
-Bitboard Position::hidden_checkers() const {
+Bitboard Position::hidden_checkers(Color c) const {
 
   // Pinned pieces protect our king, dicovery checks attack the enemy king
   Bitboard b, result = 0;
-  Bitboard pinners = pieces(FindPinned ? ~sideToMove : sideToMove);
-  Square ksq = king_square(FindPinned ? sideToMove : ~sideToMove);
+  Bitboard pinners = pieces(FindPinned ? ~c : c);
+  Square ksq = king_square(FindPinned ? c : ~c);
 
   // Pinners are sliders, that give check when candidate pinned is removed
   pinners &=  (pieces(ROOK, QUEEN) & PseudoAttacks[ROOK][ksq])
@@ -435,15 +435,15 @@ Bitboard Position::hidden_checkers() const {
   {
       b = between_bb(ksq, pop_lsb(&pinners)) & pieces();
 
-      if (b && !more_than_one(b) && (b & pieces(sideToMove)))
+      if (b && !more_than_one(b) && (b & pieces(c)))
           result |= b;
   }
   return result;
 }
 
 // Explicit template instantiations
-template Bitboard Position::hidden_checkers<true>() const;
-template Bitboard Position::hidden_checkers<false>() const;
+template Bitboard Position::hidden_checkers<true>(Color) const;
+template Bitboard Position::hidden_checkers<false>(Color) const;
 
 
 /// Position::attackers_to() computes a bitboard of all pieces which attack a

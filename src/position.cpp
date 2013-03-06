@@ -1376,7 +1376,7 @@ bool Position::is_draw() const {
       return true;
 
   // Draw by the 50 moves rule?
-  if (st->rule50 > (LowerRule50 ? 30 : 99) && (!checkers() || MoveList<LEGAL>(*this).size()))
+  if (st->rule50 > (LowerRule50 ? 50 : 99) && (!checkers() || MoveList<LEGAL>(*this).size()))
       return true;
 
   // Draw by repetition?

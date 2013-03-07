@@ -418,6 +418,9 @@ namespace {
                 << std::endl;
         }
 
+        if (depth > 2 && BestMoveChanges)
+            bestMoveNeverChanged = false;
+
         // Do we have found a "mate in x"?
         if (   Limits.mate
             && bestValue >= VALUE_MATE_IN_MAX_PLY

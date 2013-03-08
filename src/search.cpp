@@ -44,7 +44,6 @@ namespace Search {
   Color RootColor;
   Time::point SearchTime;
   StateStackPtr SetupStates;
-  MovesVectPtr SetupMoves;
 }
 
 using std::string;
@@ -294,7 +293,6 @@ namespace {
     Stack ss[MAX_PLY_PLUS_2];
     int depth, prevBestMoveChanges;
     Value bestValue, alpha, beta, delta;
-    bool bestMoveNeverChanged = true;
 
     memset(ss, 0, 4 * sizeof(Stack));
     depth = BestMoveChanges = 0;
@@ -417,10 +415,6 @@ namespace {
                 << std::endl;
         }
 
-        // Filter out startup noise when monitoring best move stability
-        if (depth > 2 && BestMoveChanges)
-            bestMoveNeverChanged = false;
-
         // Do we have found a "mate in x"?
         if (   Limits.mate
             && bestValue >= VALUE_MATE_IN_MAX_PLY
@@ -442,17 +436,12 @@ namespace {
             if (Time::now() - SearchTime > (TimeMgr.available_time() * 62) / 100)
                 stop = true;
 
-            bool recapture =   pos.is_capture(RootMoves[0].pv[0])
-                            && pos.captured_piece_type()
-                            && SetupMoves->size()
-                            && to_sq(SetupMoves->back()) == to_sq(RootMoves[0].pv[0]);
-
             // Stop search early if one move seems to be much better than others
             if (    depth >= 12
                 && !stop
                 &&  PVSize == 1
-                && (   (bestMoveNeverChanged && recapture)
-                    || Time::now() - SearchTime > (TimeMgr.available_time() * 40) / 100))
+                && (   RootMoves.size() == 1
+                    || Time::now() - SearchTime > (TimeMgr.available_time() * 20) / 100))
             {
                 Value rBeta = bestValue - 2 * PawnValueMg;
                 (ss+1)->excludedMove = RootMoves[0].pv[0];
@@ -863,14 +852,14 @@ split_point_start: // At split points actual search starts from here
       newDepth = depth - ONE_PLY + ext;
 
       // Step 13. Futility pruning (is omitted in PV nodes)
-      if (   !captureOrPromotion
+      if (   !PvNode
+          && !captureOrPromotion
           && !inCheck
           && !dangerous
           &&  move != ttMove)
       {
           // Move count based pruning
-          if (   !PvNode
-              && depth < 16 * ONE_PLY
+          if (   depth < 16 * ONE_PLY
               && moveCount >= FutilityMoveCounts[depth]
               && (!threatMove || !refutes(pos, move, threatMove)))
           {
@@ -887,7 +876,7 @@ split_point_start: // At split points actual search starts from here
           futilityValue =  ss->staticEval + ss->evalMargin + futility_margin(predictedDepth, moveCount)
                          + Gain[pos.piece_moved(move)][to_sq(move)];
 
-          if (!PvNode && futilityValue < beta)
+          if (futilityValue < beta)
           {
               if (SpNode)
                   splitPoint->mutex.lock();
@@ -896,7 +885,7 @@ split_point_start: // At split points actual search starts from here
           }
 
           // Prune moves with negative SEE at low depths
-          if (   predictedDepth < 2 * ONE_PLY
+          if (   predictedDepth < 3 * ONE_PLY
               && pos.see_sign(move) < 0)
           {
               if (SpNode)
@@ -1621,13 +1610,11 @@ void Thread::idle_loop() {
 
   // Pointer 'this_sp' is not null only if we are called from split(), and not
   // at the thread creation. So it means we are the split point's master.
-  const SplitPoint* this_sp = splitPointsSize ? activeSplitPoint : NULL;
+  SplitPoint* this_sp = splitPointsSize ? activeSplitPoint : NULL;
 
   assert(!this_sp || (this_sp->masterThread == this && searching));
 
-  // If this thread is the master of a split point and all slaves have finished
-  // their work at this split point, return from the idle loop.
-  while (!this_sp || this_sp->slavesMask)
+  while (true)
   {
       // If we are not searching, wait for a condition to be signaled instead of
       // wasting CPU time polling for work.
@@ -1719,6 +1706,17 @@ void Thread::idle_loop() {
           // our feet by the sp master. Also accessing other Thread objects is
           // unsafe because if we are exiting there is a chance are already freed.
           sp->mutex.unlock();
+      }
+
+      // If this thread is the master of a split point and all slaves have finished
+      // their work at this split point, return from the idle loop.
+      if (this_sp && !this_sp->slavesMask)
+      {
+          this_sp->mutex.lock();
+          bool finished = !this_sp->slavesMask; // Retest under lock protection
+          this_sp->mutex.unlock();
+          if (finished)
+              return;
       }
   }
 }

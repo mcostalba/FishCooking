@@ -711,7 +711,7 @@ namespace {
     // If we have a very good capture (i.e. SEE > seeValues[captured_piece_type])
     // and a reduced search returns a value much above beta, we can (almost) safely
     // prune the previous move.
-    if (   !PvNode
+    if (   !PvNode && false
         &&  depth >= 5 * ONE_PLY
         && !inCheck
         && !ss->skipNullMove

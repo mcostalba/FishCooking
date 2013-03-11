@@ -712,13 +712,13 @@ namespace {
     // and a reduced search returns a value much above beta, we can (almost) safely
     // prune the previous move.
     if (   !PvNode
-        &&  depth >= 4 * ONE_PLY
+        &&  depth >= 5 * ONE_PLY
         && !inCheck
         && !ss->skipNullMove
         &&  excludedMove == MOVE_NONE
         &&  abs(beta) < VALUE_MATE_IN_MAX_PLY)
     {
-        Value rbeta = beta + 200;
+        Value rbeta = beta + 400;
         Depth rdepth = depth - ONE_PLY - 3 * ONE_PLY;
 
         assert(rdepth >= ONE_PLY);

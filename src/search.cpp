@@ -639,7 +639,7 @@ namespace {
     // the score by more than futility_margin(depth) if we do a null move.
     if (   !PvNode
         && !ss->skipNullMove
-        &&  depth < 4 * ONE_PLY
+        &&  depth < 5 * ONE_PLY
         && !inCheck
         &&  eval - FutilityMargins[depth][0] >= beta
         &&  abs(beta) < VALUE_MATE_IN_MAX_PLY

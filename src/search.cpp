@@ -711,7 +711,7 @@ namespace {
     // If we have a very good capture (i.e. SEE > seeValues[captured_piece_type])
     // and a reduced search returns a value much above beta, we can (almost) safely
     // prune the previous move.
-    if (   !PvNode && false
+    if (   !PvNode
         &&  depth >= 5 * ONE_PLY
         && !inCheck
         && !ss->skipNullMove
@@ -719,7 +719,7 @@ namespace {
         &&  abs(beta) < VALUE_MATE_IN_MAX_PLY)
     {
         Value rbeta = beta + 200;
-        Depth rdepth = depth - ONE_PLY - 5 * ONE_PLY;
+        Depth rdepth = depth - ONE_PLY - 2 * ONE_PLY;
 
         assert(rdepth >= ONE_PLY);
         assert((ss-1)->currentMove != MOVE_NONE);

@@ -293,6 +293,7 @@ namespace {
     Stack ss[MAX_PLY_PLUS_2];
     int depth, prevBestMoveChanges;
     Value bestValue, alpha, beta, delta;
+    bool triedEasyMove = false;
 
     memset(ss, 0, 4 * sizeof(Stack));
     depth = BestMoveChanges = 0;
@@ -439,10 +440,12 @@ namespace {
             // Stop search early if one move seems to be much better than others
             if (    depth >= 12
                 && !stop
+                && !triedEasyMove
                 &&  PVSize == 1
                 && (   RootMoves.size() == 1
                     || Time::now() - SearchTime > (TimeMgr.available_time() * 20) / 100))
             {
+                triedEasyMove = true;
                 Value rBeta = bestValue - 2 * PawnValueMg;
                 (ss+1)->excludedMove = RootMoves[0].pv[0];
                 (ss+1)->skipNullMove = true;
@@ -1125,6 +1128,12 @@ split_point_start: // At split points actual search starts from here
     if (pos.is_draw<true>() || ss->ply > MAX_PLY)
         return DrawValue[pos.side_to_move()];
 
+    // Decide whether or not to include checks, this fixes also the type of
+    // TT entry depth that we are going to use. Note that in qsearch we use
+    // only two types of depth in TT: DEPTH_QS_CHECKS or DEPTH_QS_NO_CHECKS.
+    ttDepth = InCheck || depth >= DEPTH_QS_CHECKS ? DEPTH_QS_CHECKS
+                                                  : DEPTH_QS_NO_CHECKS;
+
     // Transposition table lookup. At PV nodes, we don't use the TT for
     // pruning, but only for move ordering.
     posKey = pos.key();
@@ -1132,11 +1141,6 @@ split_point_start: // At split points actual search starts from here
     ttMove = tte ? tte->move() : MOVE_NONE;
     ttValue = tte ? value_from_tt(tte->value(),ss->ply) : VALUE_NONE;
 
-    // Decide whether or not to include checks, this fixes also the type of
-    // TT entry depth that we are going to use. Note that in qsearch we use
-    // only two types of depth in TT: DEPTH_QS_CHECKS or DEPTH_QS_NO_CHECKS.
-    ttDepth = InCheck || depth >= DEPTH_QS_CHECKS ? DEPTH_QS_CHECKS
-                                                  : DEPTH_QS_NO_CHECKS;
     if (   tte
         && tte->depth() >= ttDepth
         && ttValue != VALUE_NONE // Only in case of TT access race

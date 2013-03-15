@@ -445,7 +445,7 @@ namespace {
                 && (   RootMoves.size() == 1
                     || Time::now() - SearchTime > (TimeMgr.available_time() * 20) / 100))
             {
-                triedEasyMove = true;
+                // triedEasyMove = true;
                 Value rBeta = bestValue - 2 * PawnValueMg;
                 (ss+1)->excludedMove = RootMoves[0].pv[0];
                 (ss+1)->skipNullMove = true;

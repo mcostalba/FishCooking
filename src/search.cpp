@@ -293,7 +293,6 @@ namespace {
     Stack ss[MAX_PLY_PLUS_2];
     int depth, prevBestMoveChanges;
     Value bestValue, alpha, beta, delta;
-    bool triedEasyMove = false;
 
     memset(ss, 0, 4 * sizeof(Stack));
     depth = BestMoveChanges = 0;
@@ -440,12 +439,10 @@ namespace {
             // Stop search early if one move seems to be much better than others
             if (    depth >= 12
                 && !stop
-                && !triedEasyMove
                 &&  PVSize == 1
                 && (   RootMoves.size() == 1
                     || Time::now() - SearchTime > (TimeMgr.available_time() * 20) / 100))
             {
-                triedEasyMove = true;
                 Value rBeta = bestValue - 2 * PawnValueMg;
                 (ss+1)->excludedMove = RootMoves[0].pv[0];
                 (ss+1)->skipNullMove = true;
@@ -888,7 +885,7 @@ split_point_start: // At split points actual search starts from here
           }
 
           // Prune moves with negative SEE at low depths
-          if (   predictedDepth < 3 * ONE_PLY
+          if (   predictedDepth < 4 * ONE_PLY
               && pos.see_sign(move) < 0)
           {
               if (SpNode)

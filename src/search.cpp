@@ -911,8 +911,7 @@ split_point_start: // At split points actual search starts from here
 
       // Step 15. Reduced depth search (LMR). If the move fails high will be
       // re-searched at full depth.
-      if (    depth > 3 * ONE_PLY
-          && !pvMove
+      if (   !pvMove
           && !captureOrPromotion
           && !dangerous)
       {

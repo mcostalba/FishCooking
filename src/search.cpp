@@ -815,7 +815,10 @@ split_point_start: // At split points actual search starts from here
                      && type_of(pos.piece_on(to_sq(move))) != PAWN
                      && type_of(move) == NORMAL
                      && (  pos.non_pawn_material(WHITE) + pos.non_pawn_material(BLACK)
-                         - PieceValue[MG][pos.piece_on(to_sq(move))] == VALUE_ZERO));
+                         - PieceValue[MG][pos.piece_on(to_sq(move))] == VALUE_ZERO))
+                 || move == ttMove
+                 || move == ss->killers[0]
+                 || move == ss->killers[1];
 
       // Step 12. Extend checks and, in PV nodes, also dangerous moves
       if (givesCheck && pos.see_sign(move) >= 0)
@@ -852,8 +855,7 @@ split_point_start: // At split points actual search starts from here
       if (   !PvNode
           && !captureOrPromotion
           && !inCheck
-          && !dangerous
-          &&  move != ttMove)
+          && !dangerous)
       {
           // Move count based pruning
           if (   depth < 16 * ONE_PLY
@@ -912,10 +914,7 @@ split_point_start: // At split points actual search starts from here
       if (    depth > 3 * ONE_PLY
           && !pvMove
           && !captureOrPromotion
-          && !dangerous
-          &&  move != ttMove
-          &&  move != ss->killers[0]
-          &&  move != ss->killers[1])
+          && !dangerous)
       {
           ss->reduction = reduction<PvNode>(depth, moveCount);
           Depth d = std::max(newDepth - ss->reduction, ONE_PLY);

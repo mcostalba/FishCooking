@@ -741,7 +741,7 @@ namespace {
     }
 
     // Step 10. Internal iterative deepening
-    if (   depth >= 5 * ONE_PLY
+    if (   depth >= (PvNode ? 5 : 8) * ONE_PLY
         && ttMove == MOVE_NONE
         && (PvNode || !allNode))
     {

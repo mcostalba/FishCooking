@@ -204,17 +204,18 @@ void MovePicker::score<EVASIONS>() {
   // is not under attack, ordered by history value, then bad-captures and quiet
   // moves with a negative SEE. This last group is ordered by the SEE score.
   Move m;
-  int seeScore;
 
   for (MoveStack* it = moves; it != end; ++it)
   {
       m = it->move;
-      if ((seeScore = pos.see_sign(m)) < 0)
-          it->score = seeScore - History::Max; // At the bottom
-
-      else if (pos.is_capture(m))
-          it->score =  PieceValue[MG][pos.piece_on(to_sq(m))]
-                     - type_of(pos.piece_moved(m)) + History::Max;
+      if (pos.is_capture(m))
+      {
+          int seeScore = pos.see_sign(m);
+          if (seeScore < 0)
+              it->score = seeScore - History::Max; // At the bottom
+          else
+              it->score = seeScore + History::Max;
+      }
       else
           it->score = Hist[pos.piece_moved(m)][to_sq(m)];
   }

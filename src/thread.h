@@ -1,7 +1,7 @@
 /*
   Stockfish, a UCI chess playing engine derived from Glaurung 2.1
   Copyright (C) 2004-2008 Tord Romstad (Glaurung author)
-  Copyright (C) 2008-2012 Marco Costalba, Joona Kiiski, Tord Romstad
+  Copyright (C) 2008-2013 Marco Costalba, Joona Kiiski, Tord Romstad
 
   Stockfish is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -76,7 +76,6 @@ struct SplitPoint {
 
   // Shared data
   Mutex mutex;
-  Position* slavesPositions[MAX_THREADS];
   volatile uint64_t slavesMask;
   volatile int64_t nodes;
   volatile Value alpha;
@@ -111,6 +110,7 @@ struct Thread {
   Material::Table materialTable;
   Endgames endgames;
   Pawns::Table pawnsTable;
+  Position* activePosition;
   size_t idx;
   int maxPly;
   Mutex mutex;
@@ -150,7 +150,7 @@ struct ThreadPool : public std::vector<Thread*> {
 
   MainThread* main_thread() { return static_cast<MainThread*>((*this)[0]); }
   void read_uci_options();
-  bool slave_available(Thread* master) const;
+  Thread* available_slave(Thread* master) const;
   void wait_for_think_finished();
   void start_thinking(const Position&, const Search::LimitsType&,
                       const std::vector<Move>&, Search::StateStackPtr&);

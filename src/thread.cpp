@@ -1,7 +1,7 @@
 /*
   Stockfish, a UCI chess playing engine derived from Glaurung 2.1
   Copyright (C) 2004-2008 Tord Romstad (Glaurung author)
-  Copyright (C) 2008-2012 Marco Costalba, Joona Kiiski, Tord Romstad
+  Copyright (C) 2008-2013 Marco Costalba, Joona Kiiski, Tord Romstad
 
   Stockfish is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -43,11 +43,12 @@ namespace { extern "C" {
 // Thread c'tor starts a newly-created thread of execution that will call
 // the the virtual function idle_loop(), going immediately to sleep.
 
-Thread::Thread() : splitPoints() {
+Thread::Thread() /* : splitPoints() */ { // Value-initialization bug in MSVC
 
   searching = exit = false;
   maxPly = splitPointsSize = 0;
   activeSplitPoint = NULL;
+  activePosition = NULL;
   idx = Threads.size();
 
   if (!thread_create(handle, start_routine, this))
@@ -229,13 +230,13 @@ void ThreadPool::read_uci_options() {
 // slave_available() tries to find an idle thread which is available as a slave
 // for the thread 'master'.
 
-bool ThreadPool::slave_available(Thread* master) const {
+Thread* ThreadPool::available_slave(Thread* master) const {
 
   for (const_iterator it = begin(); it != end(); ++it)
       if ((*it)->is_available_to(master))
-          return true;
+          return *it;
 
-  return false;
+  return NULL;
 }
 
 
@@ -289,24 +290,19 @@ void Thread::split(Position& pos, Stack* ss, Value alpha, Value beta, Value* bes
 
   splitPointsSize++;
   activeSplitPoint = &sp;
+  activePosition = NULL;
 
   size_t slavesCnt = 1; // This thread is always included
+  Thread* slave;
 
-  for (ThreadPool::iterator it = Threads.begin(); it != Threads.end() && !Fake; ++it)
+  while (    (slave = Threads.available_slave(this)) != NULL
+         && ++slavesCnt <= Threads.maxThreadsPerSplitPoint && !Fake)
   {
-      Thread* slave = *it;
-
-      if (slave->is_available_to(this) && ++slavesCnt <= Threads.maxThreadsPerSplitPoint)
-      {
-          sp.slavesMask |= 1ULL << slave->idx;
-          slave->activeSplitPoint = &sp;
-          slave->searching = true; // Slave leaves idle_loop()
-          slave->notify_one(); // Could be sleeping
-      }
+      sp.slavesMask |= 1ULL << slave->idx;
+      slave->activeSplitPoint = &sp;
+      slave->searching = true; // Slave leaves idle_loop()
+      slave->notify_one(); // Could be sleeping
   }
-
-  sp.mutex.unlock();
-  Threads.mutex.unlock();
 
   // Everything is set up. The master thread enters the idle loop, from which
   // it will instantly launch a search, because its 'searching' flag is set.
@@ -314,22 +310,27 @@ void Thread::split(Position& pos, Stack* ss, Value alpha, Value beta, Value* bes
   // their work at this split point.
   if (slavesCnt > 1 || Fake)
   {
+      sp.mutex.unlock();
+      Threads.mutex.unlock();
+
       Thread::idle_loop(); // Force a call to base class idle_loop()
 
       // In helpful master concept a master can help only a sub-tree of its split
       // point, and because here is all finished is not possible master is booked.
       assert(!searching);
-  }
+      assert(!activePosition);
 
-  // We have returned from the idle loop, which means that all threads are
-  // finished. Note that setting 'searching' and decreasing splitPointsSize is
-  // done under lock protection to avoid a race with Thread::is_available_to().
-  Threads.mutex.lock();
-  sp.mutex.lock();
+      // We have returned from the idle loop, which means that all threads are
+      // finished. Note that setting 'searching' and decreasing splitPointsSize is
+      // done under lock protection to avoid a race with Thread::is_available_to().
+      Threads.mutex.lock();
+      sp.mutex.lock();
+  }
 
   searching = true;
   splitPointsSize--;
   activeSplitPoint = sp.parentSplitPoint;
+  activePosition = &pos;
   pos.set_nodes_searched(pos.nodes_searched() + sp.nodes);
   *bestMove = sp.bestMove;
   *bestValue = sp.bestValue;

@@ -175,14 +175,18 @@ void MovePicker::score<CAPTURES>() {
   for (MoveStack* it = moves; it != end; ++it)
   {
       m = it->move;
-      it->score =  PieceValue[MG][pos.piece_on(to_sq(m))]
-                 - type_of(pos.piece_moved(m));
+      if (depth > ONE_PLY) {
+          it->score = pos.see(m);
+      } else {
+          it->score =  PieceValue[MG][pos.piece_on(to_sq(m))]
+                     - type_of(pos.piece_moved(m));
 
-      if (type_of(m) == PROMOTION)
-          it->score += PieceValue[MG][promotion_type(m)] - PieceValue[MG][PAWN];
+          if (type_of(m) == PROMOTION)
+              it->score += PieceValue[MG][promotion_type(m)] - PieceValue[MG][PAWN];
 
-      else if (type_of(m) == ENPASSANT)
-          it->score += PieceValue[MG][PAWN];
+          else if (type_of(m) == ENPASSANT)
+              it->score += PieceValue[MG][PAWN];
+      }
   }
 }
 

@@ -745,10 +745,8 @@ namespace {
         && ttMove == MOVE_NONE
         && (PvNode || !allNode || eval + PawnValueMg >= beta))
     {
-        Depth d = (PvNode ? depth - 2 * ONE_PLY : depth / 2);
-
         ss->skipNullMove = true;
-        search<PvNode ? PV : NonPV>(pos, ss, alpha, beta, d, allNode);
+        search<PvNode ? PV : NonPV>(pos, ss, alpha, beta, depth / 2, allNode);
         ss->skipNullMove = false;
 
         tte = TT.probe(posKey);

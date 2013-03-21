@@ -175,7 +175,7 @@ void MovePicker::score<CAPTURES>() {
   for (MoveStack* it = moves; it != end; ++it)
   {
       m = it->move;
-      if (depth > ONE_PLY) {
+      if (depth >= ONE_PLY) {
           it->score = pos.see(m);
       } else {
           it->score =  PieceValue[MG][pos.piece_on(to_sq(m))]
@@ -214,7 +214,7 @@ void MovePicker::score<EVASIONS>() {
       m = it->move;
       if (pos.is_capture(m))
       {
-          int seeScore = pos.see_sign(m);
+          int seeScore = pos.see(m);
           if (seeScore < 0)
               it->score = seeScore - History::Max; // At the bottom
           else

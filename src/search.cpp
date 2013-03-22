@@ -743,7 +743,7 @@ namespace {
     // Step 10. Internal iterative deepening
     if (   depth >= 8 * ONE_PLY
         && ttMove == MOVE_NONE
-        && (PvNode || !allNode || eval + PawnValueMg >= beta))
+        && (PvNode || !allNode))
     {
         ss->skipNullMove = true;
         search<PvNode ? PV : NonPV>(pos, ss, alpha, beta, depth / 2, allNode);

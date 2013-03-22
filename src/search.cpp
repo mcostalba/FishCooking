@@ -659,7 +659,8 @@ namespace {
         ss->currentMove = MOVE_NULL;
 
         // Null move dynamic reduction based on depth
-        Depth R = 4 * ONE_PLY + depth / 4;
+        //Depth R = 4 * ONE_PLY + depth / 4;
+        Depth R = 5 * ONE_PLY;
 
         // Null move dynamic reduction based on value
 //        if (eval - PawnValueMg > beta)

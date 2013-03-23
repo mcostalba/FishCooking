@@ -38,29 +38,19 @@ namespace {
   const Value RedundantQueenPenalty = Value(320);
   const Value RedundantRookPenalty  = Value(554);
 
-  //                                  pair  pawn knight bishop rook queen
-  const int LinearCoefficients[6] = { 1617, -162, -1172, -190,  105,  26 };
+  const int LinearCoefficients[6] = { 1744, -211, -1199, -152, 177, 46 };
+
+#define X 0
 
   const int QuadraticCoefficientsSameColor[][PIECE_TYPE_NB] = {
-    // pair pawn knight bishop rook queen
-    {   7                               }, // Bishop pair
-    {  39,    2                         }, // Pawn
-    {  35,  271,  -4                    }, // Knight
-    {   7,   25,   4,    7              }, // Bishop
-    { -27,   -2,  46,   100,   56       }, // Rook
-    {  58,   29,  83,   148,   -3,  -25 }  // Queen
-  };
+  { X, X, X, X, X, X }, { 43, 1, X, X, X, X }, { 54, 283, -51, X, X, X },
+  { X, 13, 25, X, X, X }, { 3, 11, 90, 143, 46, X }, { 68, 8, 79, 142, 14, X } };
 
   const int QuadraticCoefficientsOppositeColor[][PIECE_TYPE_NB] = {
-    //           THEIR PIECES
-    // pair pawn knight bishop rook queen
-    {  41                               }, // Bishop pair
-    {  37,   41                         }, // Pawn
-    {  10,   62,  41                    }, // Knight      OUR PIECES
-    {  57,   64,  39,    41             }, // Bishop
-    {  50,   40,  23,   -22,   41       }, // Rook
-    { 106,  101,   3,   151,  171,   41 }  // Queen
-  };
+  { X, X, X, X, X, X }, { 31, X, X, X, X, X }, { 25, 68, X, X, X, X },
+  { 76, 76, 38, X, X, X }, { 64, 43, 28, -25, X, X }, { 251, 100, -2, 171, 160, X } };
+
+#undef X
 
   // Endgame evaluation and scaling functions accessed direcly and not through
   // the function maps because correspond to more then one material hash key.

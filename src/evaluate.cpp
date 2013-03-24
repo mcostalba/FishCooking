@@ -531,7 +531,18 @@ Value do_evaluate(const Position& pos, Value& margin) {
         else
             bonus += bonus / 2;
     }
-    return make_score(bonus, bonus);
+
+	int weightedMajorCount = std::min(4, pos.piece_count(Them, ROOK) + pos.piece_count(Them, QUEEN) * 2);
+
+	// We derive a percentage of weighted majors base off of normal amount.
+	// Therefor, bal is the percentage of average.
+	int bal = (weightedMajorCount * 10000) / 300;
+
+	Value baseMod = (bonus * 2) / 3; // Two thirds without scale
+	Value majoMod = ((bonus * bal) / 100) / 3; // One third with scale
+	bonus = baseMod + majoMod; //Together to form final bonus.
+
+	return make_score(bonus, bonus);
   }
 
 

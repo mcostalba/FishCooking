@@ -88,7 +88,7 @@ namespace {
   //
   // Values modified by Joona Kiiski
   const Score WeightsInternal[] = {
-      S(252, 344), S(216, 266), S(46, 0)
+      S(252, 344), S(216, 266), S(33, 33)
   };
 
   // MobilityBonus[PieceType][attacked] contains mobility bonuses for middle and
@@ -427,7 +427,10 @@ Value do_evaluate(const Position& pos, Value& margin) {
   if (ei.mi->space_weight())
   {
       int s = evaluate_space<WHITE>(pos, ei) - evaluate_space<BLACK>(pos, ei);
-      score += apply_weight(make_score(s * ei.mi->space_weight(), 0), Weights[Space]);
+      
+	  int val = s * ei.mi->space_weight();
+	  
+	  score += apply_weight(make_score(val, val), Weights[Space]);
   }
 
   // Scale winning side if position is more drawish that what it appears

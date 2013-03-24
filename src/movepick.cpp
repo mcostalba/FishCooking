@@ -104,7 +104,7 @@ MovePicker::MovePicker(const Position& p, Move ttm, Depth d, const History& h,
 }
 
 MovePicker::MovePicker(const Position& p, Move ttm, Depth d, const History& h,
-                       Square sq) : pos(p), Hist(h), cur(moves), end(moves) {
+                       Square sq) : pos(p), Hist(h), depth(d), cur(moves), end(moves) {
 
   assert(d <= DEPTH_ZERO);
 

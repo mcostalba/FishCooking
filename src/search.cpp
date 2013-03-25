@@ -630,9 +630,7 @@ namespace {
         Value rbeta = beta - razor_margin(depth);
         Value v = qsearch<NonPV, false>(pos, ss, rbeta-1, rbeta, DEPTH_ZERO);
         if (v < rbeta)
-            // Logically we should return (v + razor_margin(depth)), but
-            // surprisingly this did slightly weaker in tests.
-            return v;
+            return v + razor_margin(depth);
     }
 
     // Step 7. Static null move pruning (is omitted in PV nodes)

@@ -175,7 +175,7 @@ void MovePicker::score<CAPTURES>() {
   for (MoveStack* it = moves; it != end; ++it)
   {
       m = it->move;
-      if (depth >= ONE_PLY) {
+      if (depth >= ONE_PLY * 3) {
           it->score = pos.see(m);
       } else {
           it->score =  PieceValue[MG][pos.piece_on(to_sq(m))]
@@ -207,19 +207,19 @@ void MovePicker::score<EVASIONS>() {
   // Try good captures ordered by MVV/LVA, then non-captures if destination square
   // is not under attack, ordered by history value, then bad-captures and quiet
   // moves with a negative SEE. This last group is ordered by the SEE score.
+  int seeScore;
   Move m;
 
   for (MoveStack* it = moves; it != end; ++it)
   {
       m = it->move;
-      if (pos.is_capture(m))
-      {
-          int seeScore = pos.see(m);
-          if (seeScore < 0)
-              it->score = seeScore - History::Max; // At the bottom
-          else
-              it->score = seeScore + History::Max;
-      }
+      if ((seeScore = pos.see_sign(m)) < 0)
+          it->score = seeScore - History::Max; // At the bottom
+
+      else if (pos.is_capture(m))
+          it->score =  PieceValue[MG][pos.piece_on(to_sq(m))]
+                     - type_of(pos.piece_moved(m)) + History::Max;
+
       else
           it->score = Hist[pos.piece_moved(m)][to_sq(m)];
   }

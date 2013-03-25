@@ -136,7 +136,7 @@ MovePicker::MovePicker(const Position& p, Move ttm, Depth d, const History& h,
 }
 
 MovePicker::MovePicker(const Position& p, Move ttm, const History& h, PieceType pt)
-                       : pos(p), Hist(h), cur(moves), end(moves) {
+                       : pos(p), Hist(h), depth(ONE_PLY), cur(moves), end(moves) {
 
   assert(!pos.checkers());
 

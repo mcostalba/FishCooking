@@ -194,7 +194,10 @@ void MovePicker::score<QUIETS>() {
   for (MoveStack* it = moves; it != end; ++it)
   {
       m = it->move;
-      it->score = Hist[pos.piece_moved(m)][to_sq(m)];
+      if ((seeScore = pos.see_sign(m)) < 0)
+          it->score = seeScore - History::Max; // At the bottom
+      else
+          it->score = Hist[pos.piece_moved(m)][to_sq(m)];
   }
 }
 

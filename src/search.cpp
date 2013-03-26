@@ -855,13 +855,13 @@ split_point_start: // At split points actual search starts from here
       if (   !PvNode
           && !captureOrPromotion
           && !inCheck
-          && !dangerous
           &&  move != ttMove
           &&  bestValue > VALUE_MATED_IN_MAX_PLY)
       {
           // Move count based pruning
-          if (   depth < 16 * ONE_PLY
-              && moveCount >= FutilityMoveCounts[depth]
+          if (    depth < 16 * ONE_PLY
+              && !dangerous
+              &&  moveCount >= FutilityMoveCounts[depth]
               && (!threatMove || !refutes(pos, move, threatMove)))
           {
               if (SpNode)
@@ -870,14 +870,26 @@ split_point_start: // At split points actual search starts from here
               continue;
           }
 
-          // Value based pruning
+          // Prune moves with negative SEE at low depths
           // We illogically ignore reduction condition depth >= 3*ONE_PLY for predicted depth,
           // but fixing this made program slightly weaker.
           Depth predictedDepth = newDepth - reduction<PvNode>(depth, moveCount);
+
+          if (   predictedDepth < 4 * ONE_PLY
+              && pos.see_sign(move) < 0)
+          {
+              if (SpNode)
+                  splitPoint->mutex.lock();
+
+              continue;
+          }
+
+          // Value based pruning
           futilityValue =  ss->staticEval + ss->evalMargin + futility_margin(predictedDepth, moveCount)
                          + Gain[pos.piece_moved(move)][to_sq(move)];
 
-          if (futilityValue < beta)
+          if (   !dangerous
+              &&  futilityValue < beta)
           {
               bestValue = std::max(bestValue, futilityValue);
 
@@ -890,15 +902,6 @@ split_point_start: // At split points actual search starts from here
               continue;
           }
 
-          // Prune moves with negative SEE at low depths
-          if (   predictedDepth < 4 * ONE_PLY
-              && pos.see_sign(move) < 0)
-          {
-              if (SpNode)
-                  splitPoint->mutex.lock();
-
-              continue;
-          }
       }
 
       // Check for legality only before to do the move

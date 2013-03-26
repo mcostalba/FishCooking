@@ -851,6 +851,7 @@ split_point_start: // At split points actual search starts from here
       // Update current move (this must be done after singular extension search)
       newDepth = depth - ONE_PLY + ext;
 
+      bool badSee = false;
       // Step 13. Futility pruning (is omitted in PV nodes)
       if (   !PvNode
           && !captureOrPromotion
@@ -891,14 +892,18 @@ split_point_start: // At split points actual search starts from here
           }
 
           // Prune moves with negative SEE at low depths
-          if (   predictedDepth < 4 * ONE_PLY
-              && pos.see_sign(move) < 0)
+          if (pos.see_sign(move) < 0)
           {
-              if (SpNode)
-                  splitPoint->mutex.lock();
+              if (predictedDepth < 4 * ONE_PLY)
+              {
+                  if (SpNode)
+                      splitPoint->mutex.lock();
 
-              continue;
-          }
+                  continue;
+              }
+
+              badSee = true;
+          } 
       }
 
       // Check for legality only before to do the move
@@ -926,7 +931,7 @@ split_point_start: // At split points actual search starts from here
           &&  move != ss->killers[0]
           &&  move != ss->killers[1])
       {
-          ss->reduction = reduction<PvNode>(depth, moveCount);
+          ss->reduction = reduction<PvNode>(depth, moveCount) + (badSee ? ONE_PLY : DEPTH_ZERO);
           Depth d = std::max(newDepth - ss->reduction, ONE_PLY);
           if (SpNode)
               alpha = splitPoint->alpha;

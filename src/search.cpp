@@ -392,6 +392,13 @@ namespace {
 
                     alpha -= delta;
                     delta += delta / 2;
+
+                    // Go to next ply after a few fail lows
+                    if (delta >= 64)
+                    {
+                       alpha = -VALUE_INFINITE;
+                       break;
+                    }
                 }
 
                 assert(alpha >= -VALUE_INFINITE && beta <= VALUE_INFINITE);

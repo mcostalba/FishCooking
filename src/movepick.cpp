@@ -190,6 +190,7 @@ template<>
 void MovePicker::score<QUIETS>() {
 
   Move m;
+  int seeScore;
 
   for (MoveStack* it = moves; it != end; ++it)
   {

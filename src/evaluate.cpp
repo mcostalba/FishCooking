@@ -918,12 +918,19 @@ Value do_evaluate(const Position& pos, Value& margin) {
                 // huge bonus. Even bigger if we protect the pawn's path.
                 if (!unsafeSquares)
                     ebonus += Value(rr * (squaresToQueen == defendedSquares ? 17 : 15));
-                else
+                else if (((unsafeSquares & defendedSquares) == unsafeSquares))
                     // OK, there are enemy attacks or pieces (but not pawns). Are those
                     // squares which are attacked by the enemy also attacked by us ?
-                    // If yes, big bonus (but smaller than when there are no enemy attacks),
-                    // if no, somewhat smaller bonus.
-                    ebonus += Value(rr * ((unsafeSquares & defendedSquares) == unsafeSquares ? 13 : 8));
+                    // give a bigger bonus if we can push safely 
+                    ebonus += Value(rr * ((unsafeSquares & SquareBB[blockSq]) == 0) ? 13 : 11);
+                else if ((unsafeSquares & SquareBB[blockSq]) == 0)
+                    // We don't have all the attacks covered but we can push safely, give 
+                    // extra bonus if we are defending that square too
+                    ebonus += Value(rr * ((defendedSquares & SquareBB[blockSq]) != 0) ? 9 : 7);
+                else
+                    // Finally the square infront is attacked if we are defending it
+                    // get a slight bonus otherwise a small bonus for it just being empty
+                    ebonus += Value(rr * ((defendedSquares & SquareBB[blockSq]) != 0) ? 5 : 3);
             }
         } // rr != 0
 

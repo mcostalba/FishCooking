@@ -229,6 +229,10 @@ namespace {
   // weighted scores, indexed by color and by a calculated integer number.
   Score KingDangerTable[COLOR_NB][128];
 
+  // OutpostBonusPreCalc[IsBishop][Color][Sqr][Points] contains the final outpost bonus based off of condition
+  Score OutpostBonusPreCalc[2][COLOR_NB][SQUARE_NB][100];
+  bool  OutpostHasBonus[2][COLOR_NB][SQUARE_NB];
+
   // TracedTerms[Color][PieceType || TracedType] contains a breakdown of the
   // evaluation terms, used when tracing.
   Score TracedScores[COLOR_NB][16];
@@ -308,6 +312,22 @@ namespace Eval {
         KingDangerTable[0][i] = apply_weight(make_score(t, 0), make_score(KingDanger[0], 0));
         KingDangerTable[1][i] = apply_weight(make_score(t, 0), make_score(KingDanger[1], 0));
     }
+
+	for(int p = 0; p <= 1; p++)
+		for(Color c = WHITE; c < COLOR_NB; c++)
+			for(Square s = SQ_A1; s < SQUARE_NB; s++)
+			{
+				Value unit = OutpostBonus[p][relative_square(c, s)];
+
+				OutpostHasBonus[p][c][s] = unit;
+
+				for(int i = 0; i <= 100; i++)
+				{
+					Value fVal = (unit * i) / 10;
+
+					OutpostBonusPreCalc[p][c][s][i] = make_score(fVal, fVal);
+				}
+			}
   }
 
 
@@ -518,20 +538,28 @@ Value do_evaluate(const Position& pos, Value& margin) {
 
     assert (Piece == BISHOP || Piece == KNIGHT);
 
-    // Initial bonus based on square
-    Value bonus = OutpostBonus[Piece == BISHOP][relative_square(Us, s)];
+	if (OutpostHasBonus[Piece == BISHOP][Us][s])
+	{
+		bool isSupported   = ei.attackedBy[Us][PAWN] & s;
+		bool safeOfTrade   = !pos.pieces(Them, KNIGHT) && !(same_color_squares(s) & pos.pieces(Them, BISHOP));
+		bool enemyQueen    = pos.piece_count(Them, QUEEN);
+		int  enemyRooks    = pos.piece_count(Them, ROOK);
+		
+		int weightedEn     = enemyQueen * 3 + enemyRooks;
 
-    // Increase bonus if supported by pawn, especially if the opponent has
-    // no minor piece which can exchange the outpost piece.
-    if (bonus && (ei.attackedBy[Us][PAWN] & s))
-    {
-        if (   !pos.pieces(Them, KNIGHT)
-            && !(same_color_squares(s) & pos.pieces(Them, BISHOP)))
-            bonus += bonus + bonus / 2;
-        else
-            bonus += bonus / 2;
-    }
-    return make_score(bonus, bonus);
+		int count = 8;
+
+		if(isSupported)
+			count += safeOfTrade * 2 + weightedEn * 3 + (safeOfTrade * 2) * weightedEn * 3;
+
+		if(Piece == KNIGHT && isSupported && !safeOfTrade
+			&& !pos.piece_count(Them, KNIGHT))
+			count += 1;
+
+		return OutpostBonusPreCalc[Piece == BISHOP][Us][s][count];
+	}
+	else
+		return SCORE_ZERO;
   }
 
 

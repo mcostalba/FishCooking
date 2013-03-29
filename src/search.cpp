@@ -901,6 +901,21 @@ split_point_start: // At split points actual search starts from here
           }
       }
 
+      if (   !PvNode
+          &&  captureOrPromotion
+          && !inCheck
+          && !dangerous
+          &&  move != ttMove
+          &&  bestValue > VALUE_MATED_IN_MAX_PLY
+          &&  newDepth < ONE_PLY
+          && pos.see_sign(move) < 0)
+       {
+           if (SpNode)
+                  splitPoint->mutex.lock();
+
+            continue;
+       }
+
       // Check for legality only before to do the move
       if (!RootNode && !SpNode && !pos.pl_move_is_legal(move, ci.pinned))
       {

@@ -30,8 +30,12 @@ std::mt19937 gen(rd());
 
 bool early_stop(int wonGames, int playedGames)
 {
-   if (playedGames == 8000)
-       return wonGames < 4000;
+   if (playedGames == 10000)
+       return winperc_to_elo(double(wonGames) / playedGames) < -1;
+   else if (playedGames == 8000)
+       return winperc_to_elo(double(wonGames) / playedGames) < -3;
+   else if (playedGames == 5000)
+       return winperc_to_elo(double(wonGames) / playedGames) < -5;
    else
        return false;
 }

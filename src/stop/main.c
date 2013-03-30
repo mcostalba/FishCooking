@@ -3,7 +3,8 @@
 #include "stat.h"
 
 typedef struct {
-	double t, threshold;
+	unsigned t;
+	double threshold;
 } Stop;
 
 void foo(double elo, unsigned nb_simu)
@@ -20,15 +21,19 @@ void foo(double elo, unsigned nb_simu)
 	double final_stop = sqrt(v*T) * Phi_inv(0.95);
 	
 	// Stopping rules
-	#define NB_STEP	2
+	#define NB_STEP	3
 	const Stop S[1+NB_STEP] = {
-		{0, 0},						// initial time point (threshold discarded)
-		{T/2, 0},		// elo < 0 after T/2 games
-		{T, final_stop}				// LOS < 95% stop after T games
+		{0, 0},				// initial time point (threshold discarded)
+		{T/4, elo_to_score(-10)},
+		{T/2, elo_to_score(0)},
+		{T, final_stop}		// LOS < 95% stop after T games
 	};
-	
+		
 	// Counter for type I and type II error
 	unsigned typeI = 0, typeII = 0;
+	
+	// Sum of stopping times
+	uint64_t sum_stop = 0;
 	
 	// Simulation loop
 	for (unsigned simu = 0; simu < nb_simu; ++simu) {
@@ -38,23 +43,26 @@ void foo(double elo, unsigned nb_simu)
 		// time)
 		double W = 0;				// random walk Wt = X1 + ... + Xt (where Xi are game results)
 		double rejected = false;	// set to true when a stop rejects the patch
+		unsigned i;
 		
-		for (unsigned i = 1; i <= NB_STEP; ++i) {
-			const double dt = S[i].t - S[i-1].t;	// dt = t'-t
+		for (i = 1; i <= NB_STEP; ++i) {
+			const unsigned dt = S[i].t - S[i-1].t;	// dt = t'-t
 			W += mu*dt + sqrt(v*dt)*gauss();		// use the law of Wt'-Wt ~= N(mu, v.dt)
 			
 			if (W < S[i].threshold) {				// apply the i-th stopping rule
 				rejected = true;
+				sum_stop += S[i].t;
 				break;
-			}
+			} else if (i == NB_STEP)
+				sum_stop += S[i].t;
 		}
 		
 		typeI += (mu <= 0) && !rejected;	// type I error = false positive (the riskiest one)
 		typeII += (mu > 0) && rejected;		// typeII error = false non positive
 	}
 	
-	printf("elo: %1.2f\ttypeI: %1.4f\ttypeII: %1.4f\n",
-		elo, (double)typeI / nb_simu, (double)typeII/ nb_simu);
+	printf("%1.2f,%1.4f,%1.4f,%u,\n",
+		elo, (double)typeI / nb_simu, (double)typeII/ nb_simu, (unsigned)(sum_stop/nb_simu));
 }
 
 int main(int argc, char **argv)
@@ -67,6 +75,9 @@ int main(int argc, char **argv)
 	const double elo_min = atof(argv[1]), elo_max = atof(argv[2]), elo_step = atof(argv[3]);
 	const unsigned nb_simu = atoll(argv[4]);
 	
+	// Print header
+	puts("elo,type I,typeII,avg(stop),");
+
 	for (double elo = elo_min; elo <= elo_max; elo += elo_step)
 		foo(elo, nb_simu);
 }

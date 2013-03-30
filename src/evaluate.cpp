@@ -199,7 +199,7 @@ namespace {
   //
   // King safety evaluation is asymmetrical and different for us (root color)
   // and for our opponent. These values are used to init KingDangerTable.
-  const int KingDangerWeights[] = { 259, 247 };
+  const int KingDangerWeights[] = { 256, 256 };
 
   // KingAttackWeights[PieceType] contains king attack weights by piece type
   const int KingAttackWeights[] = { 0, 0, 2, 2, 3, 5 };

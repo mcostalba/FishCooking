@@ -30,12 +30,16 @@ std::mt19937 gen(rd());
 
 bool early_stop(int wonGames, int playedGames)
 {
-   if (playedGames == 10000)
+   if (playedGames == 12000)
        return winperc_to_elo(double(wonGames) / playedGames) < -1;
+   else if (playedGames == 10000)
+       return winperc_to_elo(double(wonGames) / playedGames) < -2;
    else if (playedGames == 8000)
        return winperc_to_elo(double(wonGames) / playedGames) < -3;
-   else if (playedGames == 5000)
+   else if (playedGames == 6000)
        return winperc_to_elo(double(wonGames) / playedGames) < -5;
+   else if (playedGames == 4000)
+       return winperc_to_elo(double(wonGames) / playedGames) < -10;
    else
        return false;
 }
@@ -51,7 +55,7 @@ int main()
     assert(GameCount % GameChunk == 0);
 
     std::normal_distribution<> d(PatchEloMean, PatchEloStdDev);
- 
+
     for (int i = 0; i < SimulationCount ; i++)
     {
         int stoppedAfterGames;
@@ -59,7 +63,7 @@ int main()
 
         if (eloGain > PatchEloAcceptanceCriteria)
             passedWithoutStoppingCond++;
-        
+
         if (eloGain > PatchEloAcceptanceCriteria && !stoppedAfterGames)
             passedWithStoppingCond++;
 
@@ -70,7 +74,7 @@ int main()
     std::cout << "Games saved : " << gamesSaved << " / " << SimulationCount * GameCount << " ( " << double(gamesSaved) / (SimulationCount * GameCount) * 100 << "% )\n";
     std::cout << "Patches passed (without stopping condition) : " << passedWithoutStoppingCond << " / " << SimulationCount << " ( " << double(passedWithoutStoppingCond) / SimulationCount * 100 << "% )\n";
     std::cout << "Patches passed (with stopping condition )   : " << passedWithStoppingCond << " / " << SimulationCount << " ( " << double(passedWithStoppingCond) / SimulationCount * 100 << "% )\n";
-    std::cout << "Good Patch discard rate : " << passedWithoutStoppingCond - passedWithStoppingCond << " / " << passedWithoutStoppingCond << " ( " << double(passedWithoutStoppingCond - passedWithStoppingCond) / passedWithoutStoppingCond * 100 << "% )\n"; 
+    std::cout << "Good Patch discard rate : " << passedWithoutStoppingCond - passedWithStoppingCond << " / " << passedWithoutStoppingCond << " ( " << double(passedWithoutStoppingCond - passedWithStoppingCond) / passedWithoutStoppingCond * 100 << "% )\n";
 
     return 0;
 }

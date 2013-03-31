@@ -2,35 +2,43 @@
 #include <stdlib.h>
 #include "stat.h"
 
+/* DRAW_ELO controls the proportion of draws. See proba_elo() function. To estimate this value, use
+ * draw_elo = 200.log10[(1-w)/w.(1-l)/l]
+ * where (w,l) are the win and loss ratio */
+#define DRAW_ELO	240
+
 typedef struct {
-	unsigned t;
-	double threshold;
+	unsigned t;			// time (in nb of games)
+	double threshold;	// stop when the random walk is below that value at time t
 } Stop;
 
-void foo(double elo, unsigned nb_simu)
+void discrete_stop(double elo, unsigned nb_simu, double *typeI, double *typeII, unsigned *avg_stop)
 {
 	const unsigned T = 16000;
 	
 	double pwin, ploss;
-	proba_elo(elo, 200.0, &pwin, &ploss);
+	proba_elo(elo, DRAW_ELO, &pwin, &ploss);
 	
 	// Mean and Variance of Xt
 	double mu = pwin-ploss, v = pwin+ploss - mu*mu;
 	
-	// Final stop at LOS>95%
+	// Final stop at LOS < 95%
 	double final_stop = sqrt(v*T) * Phi_inv(0.95);
 	
 	// Stopping rules
-	#define NB_STEP	3
+	#define NB_STEP	6
 	const Stop S[1+NB_STEP] = {
 		{0, 0},				// initial time point (threshold discarded)
-		{T/4, elo_to_score(-10)},
-		{T/2, elo_to_score(0)},
+		{4000, 4000 * elo_to_score(-10)},
+		{6000, 6000 * elo_to_score(-5)},
+		{8000, 8000 * elo_to_score(-3)},
+		{10000, 10000 * elo_to_score(-2)},
+		{12000, 12000 * elo_to_score(-1)},
 		{T, final_stop}		// LOS < 95% stop after T games
 	};
 		
 	// Counter for type I and type II error
-	unsigned typeI = 0, typeII = 0;
+	unsigned typeI_cnt = 0, typeII_cnt = 0;
 	
 	// Sum of stopping times
 	uint64_t sum_stop = 0;
@@ -49,7 +57,7 @@ void foo(double elo, unsigned nb_simu)
 			const unsigned dt = S[i].t - S[i-1].t;	// dt = t'-t
 			W += mu*dt + sqrt(v*dt)*gauss();		// use the law of Wt'-Wt ~= N(mu, v.dt)
 			
-			if (W < S[i].threshold) {				// apply the i-th stopping rule
+			if (W < S[i].threshold) {	// apply the i-th stopping rule
 				rejected = true;
 				sum_stop += S[i].t;
 				break;
@@ -57,12 +65,13 @@ void foo(double elo, unsigned nb_simu)
 				sum_stop += S[i].t;
 		}
 		
-		typeI += (mu <= 0) && !rejected;	// type I error = false positive (the riskiest one)
-		typeII += (mu > 0) && rejected;		// typeII error = false non positive
+		typeI_cnt += (mu <= 0) && !rejected;	// type I error = false positive (the riskiest one)
+		typeII_cnt += (mu > 0) && rejected;		// typeII error = false non positive
 	}
 	
-	printf("%1.2f,%1.4f,%1.4f,%u,\n",
-		elo, (double)typeI / nb_simu, (double)typeII/ nb_simu, (unsigned)(sum_stop/nb_simu));
+	*typeI = (double)typeI_cnt / nb_simu;
+	*typeII = (double)typeII_cnt / nb_simu;
+	*avg_stop = sum_stop / nb_simu;
 }
 
 int main(int argc, char **argv)
@@ -78,6 +87,10 @@ int main(int argc, char **argv)
 	// Print header
 	puts("elo,type I,typeII,avg(stop),");
 
-	for (double elo = elo_min; elo <= elo_max; elo += elo_step)
-		foo(elo, nb_simu);
+	for (double elo = elo_min; elo <= elo_max; elo += elo_step) {
+		double typeI, typeII;
+		unsigned avg_stop;
+		discrete_stop(elo, nb_simu, &typeI, &typeII, &avg_stop);
+		printf("%.1f,%.3f,%.3f,%u\n", elo, typeI, typeII, avg_stop);
+	}
 }

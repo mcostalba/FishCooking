@@ -901,6 +901,14 @@ split_point_start: // At split points actual search starts from here
           }
       }
 
+      // Prune under promotions (excluding knight under promotion with check)
+      if (   !PvNode
+          &&  type_of(move) == PROMOTION
+          &&  promotion_type(move) != QUEEN
+          && (promotion_type(move) != KNIGHT || !(pos.attacks_from<KNIGHT>(to_sq(move)) & pos.king_square(~pos.side_to_move())))
+          &&  depth < 10 * ONE_PLY)
+          continue;
+
       // Check for legality only before to do the move
       if (!RootNode && !SpNode && !pos.pl_move_is_legal(move, ci.pinned))
       {

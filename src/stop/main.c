@@ -11,9 +11,9 @@
 #define DRAW_ELO	240
 
 /* Parametrization of the SPRT is here */
-const double elo0 = 0, elo1 = 5;	// expressed in BayesELO units
-const double alpha = 0.05;			// alpha = max type I error when elo < elo1
-const double beta = 0.1;			// alpha = max type II error when elo > elo2
+const double elo0 = 0.0, elo1 = 3.0; //5;	// expressed in BayesELO units
+const double alpha = 0.15; //0.05;			// alpha = max type I error when elo < elo1
+const double beta = 0.10; //1.0  			// alpha = max type II error when elo > elo2
 
 typedef struct {
 	unsigned t;			// time (in nb of games)
@@ -30,14 +30,23 @@ void discrete_stop(double pwin, double ploss, unsigned nb_simu,
 	double final_stop = sqrt(v*T) * Phi_inv(0.95);
 	
 	/* Stopping rule defined here */
+    /*
+	#define NB_STEP	1
+	const Stop S[1+NB_STEP] = {
+		{0, 0},				// initial time point (threshold discarded)
+		{T, final_stop}		// LOS < 95% stop after T games
+	};
+    */
+
 	#define NB_STEP	4
 	const Stop S[1+NB_STEP] = {
 		{0, 0},				// initial time point (threshold discarded)
-		{4000, 4000 * elo_to_score(-5)},
-		{8000, 8000 * elo_to_score(0)},
-		{12000, 12000 * elo_to_score(0)},
+        {4000, 4000 * elo_to_score(-5)},
+        {8000, 8000 * elo_to_score(0)},
+        {12000, 12000 * elo_to_score(0)},
 		{T, final_stop}		// LOS < 95% stop after T games
 	};
+	
 		
 	// Counter for type I and type II error
 	unsigned typeI_cnt = 0, typeII_cnt = 0;
@@ -82,13 +91,13 @@ void SPRT_stop(double pwin, double ploss, unsigned nb_simu,
 	// LLR bounds
 	const double lower_bound = log(beta / (1-alpha));
 	const double upper_bound = log((1-beta) / alpha);
-	
+
 	// Calculate the probability laws under H0 and H1
 	double pwin0, ploss0, pdraw0;
 	double pwin1, ploss1, pdraw1;
 	proba_elo(elo0, DRAW_ELO, &pwin0, &ploss0); pdraw0 = 1-pwin0-ploss0;
 	proba_elo(elo1, DRAW_ELO, &pwin1, &ploss1); pdraw1 = 1-pwin1-ploss1;
-	
+
 	// Calculate the log-likelyhood ratio increment for each game result Xt
 	const double llr_inc[3] = {
 		log(ploss1 / ploss0),
@@ -152,8 +161,92 @@ void SPRT_stop(double pwin, double ploss, unsigned nb_simu,
 	*avg_stop = sum_stop / nb_simu;
 }
 
+void real_data_test(char *filename)
+{
+    float values[32000];
+    int valueCount = 0;
+
+    // Read data
+    FILE *fp;
+    char *line = NULL;
+    int len = 0;
+    int read;    
+
+    fp = fopen(filename, "r");
+    if (!fp)
+    {
+        puts("Failed to open data file!");
+        exit(EXIT_FAILURE);
+    }
+
+    while ((read = getline(&line, &len, fp)) != -1) {
+        if (sscanf(line, "%f", &values[valueCount++]) <= 0)
+        {
+            printf("Parse file for data file on line: %d", valueCount);
+            exit(EXIT_FAILURE);
+        }
+
+    }
+
+    // Loop through samples, collecting statistics:
+    unsigned avg_stop_tot = 0;
+    double type1_elo_lost_tot = 0.0;
+    double type2_elo_lost_tot = 0.0;
+
+    for (int i = 0; i < valueCount; i++)
+    {
+        double RealElo = values[i];
+
+        // FIXME: Conversion to bayes-elo
+        // HACK : START FORKING.
+        double min = -1000.0, max = 1000.0;
+
+        while (max - min > 0.001)
+        {
+            double tryElo = (max + min) / 2;
+            double tryWin, tryLoss;
+
+            proba_elo(tryElo, DRAW_ELO, &tryWin, &tryLoss); 
+            double tryScore = 0.5 + (tryWin - tryLoss) / 2;
+            double ELO = -400 * log10(1/tryScore - 1);          
+ 
+            if (ELO > RealElo)
+                max = tryElo;
+            else
+                min = tryElo;
+        }
+
+        double elo = (max + min) / 2;
+
+        // HACK: END FORKING 
+ 
+        double pwin, ploss, typeI, typeII;
+        unsigned avg_stop;
+
+        proba_elo(elo, DRAW_ELO, &pwin, &ploss);
+        double score = 0.5 + (pwin - ploss) / 2;
+        double ELO = -400 * log10(1/score - 1);
+
+        //discrete_stop(pwin, ploss, 1000, &typeI, &typeII, &avg_stop);
+        SPRT_stop(pwin, ploss, 1000, &typeI, &typeII, &avg_stop);
+
+        printf("%.2f,%.4f,%.4f,%.2f,%.4f,%.4f,%u\n", elo, pwin, ploss, ELO, typeI, typeII, avg_stop); 
+   
+        type1_elo_lost_tot += elo * typeI;
+        type2_elo_lost_tot += elo * typeII; 
+        avg_stop_tot += avg_stop;
+    }
+
+    printf("Average stop: %d\n", avg_stop_tot / valueCount);
+    printf("Total type1 elo loss: %1.4f\n", type1_elo_lost_tot);
+    printf("Total type2 elo loss: %1.4f\n", type2_elo_lost_tot);
+}
+
 int main(int argc, char **argv)
 {
+    real_data_test("./framework_tests.csv");
+    exit(EXIT_SUCCESS);
+
 	if (argc != 5) {
 		puts("4 parameters requires: elo_min elo_max elo_step nb_simu\n");
 		exit(EXIT_FAILURE);
@@ -173,8 +266,8 @@ int main(int argc, char **argv)
 		double score = 0.5 + (pwin - ploss) / 2;
 		double ELO = -400 * log10(1/score - 1);
 		
-		//discrete_stop(pwin, ploss, nb_simu, &typeI, &typeII, &avg_stop);
-		SPRT_stop(pwin, ploss, nb_simu, &typeI, &typeII, &avg_stop);
+		discrete_stop(pwin, ploss, nb_simu, &typeI, &typeII, &avg_stop);
+		//SPRT_stop(pwin, ploss, nb_simu, &typeI, &typeII, &avg_stop);
 		
 		printf("%.2f,%.4f,%.4f,%.2f,%.4f,%.4f,%u\n", elo, pwin, ploss, ELO, typeI, typeII, avg_stop);
 	}

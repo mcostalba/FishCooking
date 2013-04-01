@@ -98,7 +98,7 @@ namespace {
   void id_loop(Position& pos);
   Value value_to_tt(Value v, int ply);
   Value value_from_tt(Value v, int ply);
-  bool check_is_dangerous(const Position& pos, Move move, Value futilityBase, Value beta);
+  bool check_is_dangerous(const Position& pos, Move move, Value futilityBase, Value beta, Value* bestValue);
   bool allows(const Position& pos, Move first, Move second);
   bool refutes(const Position& pos, Move first, Move second);
   string uci_pv(const Position& pos, int depth, Value alpha, Value beta);
@@ -1256,8 +1256,16 @@ split_point_start: // At split points actual search starts from here
           &&  move != ttMove
           && !pos.is_capture_or_promotion(move)
           &&  ss->staticEval + PawnValueMg / 4 < beta
-          && !check_is_dangerous(pos, move, futilityBase, beta))
+          && !check_is_dangerous(pos, move, futilityBase, beta, &bestValue)) {
+          if (bestValue >= beta) {
+              TT.store(posKey, value_to_tt(bestValue, ss->ply), BOUND_LOWER,
+                       ttDepth, move, ss->staticEval, ss->evalMargin);
+
+              return bestValue;
+          }
+
           continue;
+      }
 
       // Check for legality only before to do the move
       if (!pos.pl_move_is_legal(move, ci.pinned))
@@ -1338,7 +1346,7 @@ split_point_start: // At split points actual search starts from here
 
   // check_is_dangerous() tests if a checking move can be pruned in qsearch()
 
-  bool check_is_dangerous(const Position& pos, Move move, Value futilityBase, Value beta)
+  bool check_is_dangerous(const Position& pos, Move move, Value futilityBase, Value beta, Value* bestValue)
   {
     Piece pc = pos.piece_moved(move);
     Square from = from_sq(move);
@@ -1350,6 +1358,7 @@ split_point_start: // At split points actual search starts from here
     Bitboard occ = pos.pieces() ^ from ^ ksq;
     Bitboard oldAtt = pos.attacks_from(pc, from, occ);
     Bitboard newAtt = pos.attacks_from(pc, to, occ);
+    Value bv = *bestValue;
 
     // Checks which give opponent's king at most one escape square are dangerous
     if (!more_than_one(kingAtt & ~(enemies | newAtt | to)))
@@ -1363,11 +1372,17 @@ split_point_start: // At split points actual search starts from here
     Bitboard b = (enemies ^ ksq) & newAtt & ~oldAtt;
     while (b)
     {
+        Square victimSq = pop_lsb(&b);
+        Value futilityValue = futilityBase + PieceValue[EG][pos.piece_on(victimSq)];
+
         // Note that here we generate illegal "double move"!
-        if (futilityBase + PieceValue[EG][pos.piece_on(pop_lsb(&b))] >= beta)
+        if (futilityValue >= beta)
             return true;
+
+        bv = std::max(bv, futilityValue);
     }
 
+    *bestValue = bv;
     return false;
   }
 

@@ -1255,7 +1255,6 @@ split_point_start: // At split points actual search starts from here
           &&  givesCheck
           &&  move != ttMove
           && !pos.is_capture_or_promotion(move)
-          &&  ss->staticEval + PawnValueMg / 4 < beta
           && !check_is_dangerous(pos, move, futilityBase, beta))
           continue;
 

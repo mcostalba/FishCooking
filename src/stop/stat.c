@@ -49,3 +49,9 @@ double Phi_inv(double x) { return sqrt(2)*erf_inv(2*x-1); }
 
 double uniform() { return (double)rand64() / 0xffffffffffffffffULL; }
 double gauss()	 { return Phi_inv(uniform());}
+
+int game_result(double pwin, double ploss)
+{
+	double x = uniform();
+	return x < pwin ? WIN : (x < pwin+ploss ? LOSS : DRAW);
+}

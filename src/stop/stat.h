@@ -22,3 +22,6 @@ extern double gauss();		// draw N(0,1)
 // So the elo<->score formulas are not the usual ones
 double elo_to_score(double elo);
 double score_to_elo(double score);
+
+enum {LOSS=-1, DRAW=0, WIN=1};
+extern int game_result(double pwin, double ploss);

@@ -1,3 +1,4 @@
+#define _GNU_SOURCE
 #include <stdio.h>
 #include <stdlib.h>
 #include "stat.h"
@@ -11,9 +12,9 @@
 #define DRAW_ELO	240
 
 /* Parametrization of the SPRT is here */
-const double elo0 = 0.0, elo1 = 3.0; //5;	// expressed in BayesELO units
-const double alpha = 0.15; //0.05;			// alpha = max type I error when elo < elo1
-const double beta = 0.10; //1.0  			// alpha = max type II error when elo > elo2
+const double elo0 = 0.0, elo1 = 5.2; 	     // expressed in BayesELO units
+const double alpha = 0.05; //0.05;			// alpha = max type I error when elo < elo1
+const double beta = 0.05; //1.0  			// alpha = max type II error when elo > elo2
 
 typedef struct {
 	unsigned t;			// time (in nb of games)
@@ -169,8 +170,8 @@ void real_data_test(char *filename)
     // Read data
     FILE *fp;
     char *line = NULL;
-    int len = 0;
-    int read;    
+    size_t len = 0;
+    ssize_t read;    
 
     fp = fopen(filename, "r");
     if (!fp)

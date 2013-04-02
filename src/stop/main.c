@@ -12,7 +12,7 @@
 #define DRAW_ELO	240
 
 /* Parametrization of the SPRT is here */
-const double elo0 = 0.0, elo1 = 5.2; 	     // expressed in BayesELO units
+const double elo0 = 0.0, elo1 = 5.0; 	     // expressed in BayesELO units
 const double alpha = 0.05; //0.05;			// alpha = max type I error when elo < elo1
 const double beta = 0.05; //1.0  			// alpha = max type II error when elo > elo2
 

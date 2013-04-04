@@ -679,7 +679,7 @@ namespace {
             if (nullValue >= VALUE_MATE_IN_MAX_PLY)
                 nullValue = beta;
 
-            if (depth < 10 * ONE_PLY)
+            if (depth < 8 * ONE_PLY)
                 return nullValue;
 
             // Do verification search at high depths

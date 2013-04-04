@@ -2,8 +2,8 @@
 #include <stdlib.h>
 #include "stat.h"
 
-/* number of games for each simulation */
-#define T	16000
+/* Use this value to cap the number of games (standard SPRT has no cap) */
+#define T	0xffffffff
 
 /* DRAW_ELO controls the proportion of draws. See proba_elo() function. To estimate this value, use
  * draw_elo = 200.log10[(1-w)/w.(1-l)/l]
@@ -11,70 +11,9 @@
 #define DRAW_ELO	240
 
 /* Parametrization of the SPRT is here */
-const double elo0 = 0, elo1 = 5;	// expressed in BayesELO units
-const double alpha = 0.05;			// alpha = max type I error when elo < elo1
-const double beta = 0.1;			// alpha = max type II error when elo > elo2
-
-typedef struct {
-	unsigned t;			// time (in nb of games)
-	double threshold;	// stop when the random walk is below that value at time t
-} Stop;
-
-void discrete_stop(double pwin, double ploss, unsigned nb_simu,
-	double *typeI, double *typeII, unsigned *avg_stop)
-{
-	// Mean and Variance of Xt
-	double mu = pwin-ploss, v = pwin+ploss - mu*mu;
-	
-	// Final stop at LOS < 95%
-	double final_stop = sqrt(v*T) * Phi_inv(0.95);
-	
-	/* Stopping rule defined here */
-	#define NB_STEP	4
-	const Stop S[1+NB_STEP] = {
-		{0, 0},				// initial time point (threshold discarded)
-		{4000, 4000 * elo_to_score(-5)},
-		{8000, 8000 * elo_to_score(0)},
-		{12000, 12000 * elo_to_score(0)},
-		{T, final_stop}		// LOS < 95% stop after T games
-	};
-		
-	// Counter for type I and type II error
-	unsigned typeI_cnt = 0, typeII_cnt = 0;
-	
-	// Sum of stopping times
-	uint64_t sum_stop = 0;
-	
-	// Simulation loop
-	for (unsigned simu = 0; simu < nb_simu; ++simu) {
-		// We simulate the random walk at the stopping points directly. This approximation is OK if
-		// you look at the random walk from "far enough". It allows to reduce the computation time
-		// massively (compared to generating the random walk step by step, generating one game at a
-		// time)
-		double W = 0;				// random walk Wt = X1 + ... + Xt (where Xi are game results)
-		double rejected = false;	// set to true when a stop rejects the patch
-		unsigned i;
-		
-		for (i = 1; i <= NB_STEP; ++i) {
-			const unsigned dt = S[i].t - S[i-1].t;	// dt = t'-t
-			W += mu*dt + sqrt(v*dt)*gauss();		// use the law of Wt'-Wt ~= N(mu, v.dt)
-			
-			if (W < S[i].threshold) {	// apply the i-th stopping rule
-				rejected = true;
-				sum_stop += S[i].t;
-				break;
-			} else if (i == NB_STEP)
-				sum_stop += S[i].t;
-		}
-		
-		typeI_cnt += (mu <= 0) && !rejected;	// type I error = false positive (the riskiest one)
-		typeII_cnt += (mu > 0) && rejected;		// typeII error = false non positive
-	}
-	
-	*typeI = (double)typeI_cnt / nb_simu;
-	*typeII = (double)typeII_cnt / nb_simu;
-	*avg_stop = sum_stop / nb_simu;
-}
+const double elo0 = 0, elo1 = 7;	// expressed in BayesELO units
+const double alpha = 0.05;		// alpha = max type I error (reached on elo = elo0)
+const double beta = 0.05;			// beta = max type II error for elo >= elo2 (reached on elo = elo2)
 
 void SPRT_stop(double pwin, double ploss, unsigned nb_simu,
 	double *typeI, double *typeII, unsigned *avg_stop)
@@ -96,8 +35,9 @@ void SPRT_stop(double pwin, double ploss, unsigned nb_simu,
 		log(pwin1 / pwin0)
 	};
 
-	// Calculate the true values of E(Xt) and V(Xt)
+	// Calculate the true values of E(Xt) and V(Xt), and elo
 	const double mu = pwin-ploss, v = pwin+ploss - mu*mu;
+	const double elo = 200*log10(pwin/ploss*(1-ploss)/(1-pwin));
 	
 	// Collect the risk and reward statistics along the way
 	unsigned typeI_cnt = 0, typeII_cnt = 0;	// Counter for type I and type II error
@@ -106,13 +46,13 @@ void SPRT_stop(double pwin, double ploss, unsigned nb_simu,
 	for (unsigned simu = 0; simu < nb_simu; ++simu) {
 		/* Simulate one trajectory of T games
 		 * - Calculate the LLR random walk along the way
-		 * - early stop when LLR crosses a bound */		
+		 * - early stop when LLR crosses a bound */
 		bool accepted;					// patch acceptation
 		double LLR = 0;					// log-likelyhood ratio
 		unsigned count[3] = {0,0,0};	// counts the number of: LOSS, DRAW, WIN (in this order)
 		
-		unsigned t;		
-		for (t = 0; /*t < T*/; ++t) {
+		unsigned t;
+		for (t = 0; t < T; ++t) {
 			const int X = game_result(pwin, ploss);
 			LLR += llr_inc[X+1];
 			++count[X+1];
@@ -130,7 +70,7 @@ void SPRT_stop(double pwin, double ploss, unsigned nb_simu,
 			}
 		}
 		
-		/*if (t == T) {
+		if (t == T) {
 			// patch was not early stopped
 			
 			// Calculate the empirical mean and variance E_hat(Xi) and V_hat(Xi)
@@ -138,13 +78,13 @@ void SPRT_stop(double pwin, double ploss, unsigned nb_simu,
 			double mu_hat = (double)(count[WIN+1] - count[LOSS+1]) / T;
 			double v_hat = (double)(count[WIN+1] + count[LOSS+1])/T - mu_hat * mu_hat;			
 			
-			// Apply the empirical LOS > 95% condition
+			// Apply the empirical p-value > 95% condition
 			accepted = mu_hat > sqrt(v_hat/T) * Phi_inv(0.95);
 			sum_stop += T;
-		}*/
+		}
 
-		typeI_cnt += (mu <= 0) && accepted;		// type I error = false positive
-		typeII_cnt += (mu > 0) && !accepted;	// typeII error = false non positive
+		typeI_cnt += (elo <= elo0) && accepted;		// type I error
+		typeII_cnt += (elo > elo0) && !accepted;	// typeII error
 	}
 	
 	*typeI = (double)typeI_cnt / nb_simu;
@@ -173,9 +113,7 @@ int main(int argc, char **argv)
 		double score = 0.5 + (pwin - ploss) / 2;
 		double ELO = -400 * log10(1/score - 1);
 		
-		//discrete_stop(pwin, ploss, nb_simu, &typeI, &typeII, &avg_stop);
 		SPRT_stop(pwin, ploss, nb_simu, &typeI, &typeII, &avg_stop);
-		
 		printf("%.2f,%.4f,%.4f,%.2f,%.4f,%.4f,%u\n", elo, pwin, ploss, ELO, typeI, typeII, avg_stop);
 	}
 }

@@ -1,5 +1,7 @@
 #include "stat.h"
 
+#define PI 3.14159265358979323846	// GCC doesn't define this
+
 void proba_elo(double elo, double draw_elo, double *pwin, double *ploss)
 {
 	*pwin  = 1 / (1 + pow(10, (-elo + draw_elo) / 400));
@@ -37,6 +39,9 @@ uint64_t rand64()
 	return d = e + a;
 }
 
+double uniform()
+{ return (double)rand64() / 0xffffffffffffffffULL; }
+
 static double erf_inv(double x)
 {
 	static const double a = 8*(PI-3)/(3*PI*(4-PI));
@@ -46,9 +51,6 @@ static double erf_inv(double x)
 
 double Phi(double x)	 { return 0.5 + 0.5*erf(x/sqrt(2)); }
 double Phi_inv(double x) { return sqrt(2)*erf_inv(2*x-1); }
-
-double uniform() { return (double)rand64() / 0xffffffffffffffffULL; }
-double gauss()	 { return Phi_inv(uniform());}
 
 int game_result(double pwin, double ploss)
 {

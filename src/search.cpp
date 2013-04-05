@@ -832,7 +832,7 @@ split_point_start: // At split points actual search starts from here
       // a margin then we extend ttMove.
       if (    singularExtensionNode
           &&  move == ttMove
-          && !ext
+          &&  ext < ONE_PLY
           &&  pos.pl_move_is_legal(move, ci.pinned)
           &&  abs(ttValue) < VALUE_KNOWN_WIN)
       {

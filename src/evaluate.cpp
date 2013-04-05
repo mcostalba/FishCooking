@@ -167,6 +167,9 @@ namespace {
   const Score RookOpenFileBonus     = make_score(43, 21);
   const Score RookHalfOpenFileBonus = make_score(19, 10);
 
+  const Score PawnKingWithQueen    = make_score(346, 256);
+  const Score PawnKingWithoutQueen = make_score(152, 256);
+
   // Penalty for rooks trapped inside a friendly king which has lost the
   // right to castle.
   const Value TrappedRookPenalty = Value(180);
@@ -760,6 +763,9 @@ Value do_evaluate(const Position& pos, Value& margin) {
 
     // King shelter and enemy pawns storm
     Score score = ei.pi->king_safety<Us>(pos, ksq);
+
+	score = apply_weight(score,
+		((pos.pieces(Them, QUEEN) > 0) ? PawnKingWithQueen : PawnKingWithoutQueen));
 
     // King safety. This is quite complicated, and is almost certainly far
     // from optimally tuned.

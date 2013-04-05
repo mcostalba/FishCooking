@@ -892,7 +892,7 @@ split_point_start: // At split points actual search starts from here
           }
 
           // Prune moves with negative SEE at low depths
-          if (   predictedDepth < 4 * ONE_PLY
+          if (   predictedDepth < 5 * ONE_PLY
               && pos.see_sign(move) < 0)
           {
               if (SpNode)

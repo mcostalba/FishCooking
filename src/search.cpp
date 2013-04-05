@@ -649,8 +649,7 @@ namespace {
         return eval - FutilityMargins[depth][0];
 
     // Step 8. Null move search with verification search (is omitted in PV nodes)
-    if (   !PvNode
-        && !ss->skipNullMove
+    if (   !ss->skipNullMove
         &&  depth > ONE_PLY
         && !inCheck
         &&  eval >= beta

@@ -925,16 +925,29 @@ Value do_evaluate(const Position& pos, Value& margin) {
                     // if no, somewhat smaller bonus.
                     ebonus += Value(rr * ((unsafeSquares & defendedSquares) == unsafeSquares ? 13 : 8));
             }
+			else if (type_of(pos.piece_on(blockSq)) == BISHOP) 
+				ebonus -= Value(r * 18);
+
         } // rr != 0
 
         // Increase the bonus if the passed pawn is supported by a friendly pawn
         // on the same rank and a bit smaller if it's on the previous rank.
         supportingPawns = pos.pieces(Us, PAWN) & adjacent_files_bb(file_of(s));
-        if (supportingPawns & rank_bb(s))
-            ebonus += Value(r * 20);
 
-        else if (supportingPawns & rank_bb(s - pawn_push(Us)))
-            ebonus += Value(r * 12);
+		Bitboard blockedSupporting = supportingPawns & (pos.pieces(Them) << 8);
+
+        if (supportingPawns & rank_bb(s)) {
+			if (blockedSupporting & rank_bb(s))
+				ebonus += Value(r * 3);
+			else
+				ebonus += Value(r * 20);
+		}
+        else if (supportingPawns & rank_bb(s - pawn_push(Us))) {
+			if (supportingPawns & rank_bb(s - pawn_push(Us)))
+				ebonus += Value(r * 2);
+			else
+				ebonus += Value(r * 12);
+		}
 
         // Rook pawns are a special case: They are sometimes worse, and
         // sometimes better than other passed pawns. It is difficult to find

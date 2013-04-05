@@ -962,6 +962,11 @@ Value do_evaluate(const Position& pos, Value& margin) {
             else if (pos.pieces(Them, ROOK, QUEEN))
                 ebonus -= ebonus / 4;
         }
+
+		if (pos.pieces(Them, BISHOP) >= 2) {
+			ebonus = ebonus / 2;
+		}
+
         score += make_score(mbonus, ebonus);
 
     } while (b);

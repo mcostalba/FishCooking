@@ -440,6 +440,7 @@ namespace {
             if (    depth >= 12
                 && !stop
                 &&  PVSize == 1
+                &&  bestValue > VALUE_MATED_IN_MAX_PLY
                 && (   RootMoves.size() == 1
                     || Time::now() - SearchTime > (TimeMgr.available_time() * 20) / 100))
             {
@@ -745,7 +746,7 @@ namespace {
         && ttMove == MOVE_NONE
         && (PvNode || (!inCheck && ss->staticEval + Value(256) >= beta)))
     {
-        Depth d = (PvNode ? depth - 2 * ONE_PLY : depth / 2);
+        Depth d = depth - 2 * ONE_PLY - (PvNode ? DEPTH_ZERO : depth / 4);
 
         ss->skipNullMove = true;
         search<PvNode ? PV : NonPV>(pos, ss, alpha, beta, d);
@@ -856,7 +857,8 @@ split_point_start: // At split points actual search starts from here
           && !captureOrPromotion
           && !inCheck
           && !dangerous
-          &&  move != ttMove)
+          &&  move != ttMove
+          &&  bestValue > VALUE_MATED_IN_MAX_PLY)
       {
           // Move count based pruning
           if (   depth < 16 * ONE_PLY
@@ -878,9 +880,14 @@ split_point_start: // At split points actual search starts from here
 
           if (futilityValue < beta)
           {
-              if (SpNode)
-                  splitPoint->mutex.lock();
+              bestValue = std::max(bestValue, futilityValue);
 
+              if (SpNode)
+              {
+                  splitPoint->mutex.lock();
+                  if (bestValue > splitPoint->bestValue)
+                      splitPoint->bestValue = bestValue;
+              }
               continue;
           }
 

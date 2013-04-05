@@ -167,8 +167,8 @@ namespace {
   const Score RookOpenFileBonus     = make_score(43, 21);
   const Score RookHalfOpenFileBonus = make_score(19, 10);
 
-  const Score PawnKingWithQueen    = make_score(346, 256);
-  const Score PawnKingWithoutQueen = make_score(152, 256);
+  const Score PawnKingWithQueen    = make_score(298, 256);
+  const Score PawnKingWithoutQueen = make_score(186, 256);
 
   // Penalty for rooks trapped inside a friendly king which has lost the
   // right to castle.

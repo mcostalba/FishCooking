@@ -61,9 +61,6 @@ namespace {
   // Different node types, used as template parameter
   enum NodeType { Root, PV, NonPV, SplitPointRoot, SplitPointPV, SplitPointNonPV };
 
-  // Dynamic razoring margin based on depth
-  inline Value razor_margin(Depth d) { return Value(512 + 16 * int(d)); }
-
   // Futility lookup tables (initialized at startup) and their access functions
   Value FutilityMargins[16][64]; // [depth][moveNumber]
   int FutilityMoveCounts[32];    // [depth]
@@ -619,24 +616,7 @@ namespace {
         Gain.update(pos.piece_on(to), to, -(ss-1)->staticEval - ss->staticEval);
     }
 
-    // Step 6. Razoring (is omitted in PV nodes)
-    if (   !PvNode
-        &&  depth < 4 * ONE_PLY
-        && !inCheck
-        &&  eval + razor_margin(depth) < beta
-        &&  ttMove == MOVE_NONE
-        &&  abs(beta) < VALUE_MATE_IN_MAX_PLY
-        && !pos.pawn_on_7th(pos.side_to_move()))
-    {
-        Value rbeta = beta - razor_margin(depth);
-        Value v = qsearch<NonPV, false>(pos, ss, rbeta-1, rbeta, DEPTH_ZERO);
-        if (v < rbeta)
-            // Logically we should return (v + razor_margin(depth)), but
-            // surprisingly this did slightly weaker in tests.
-            return v;
-    }
-
-    // Step 7. Static null move pruning (is omitted in PV nodes)
+    // Step 6. Static null move pruning (is omitted in PV nodes)
     // We're betting that the opponent doesn't have a move that will reduce
     // the score by more than futility_margin(depth) if we do a null move.
     if (   !PvNode
@@ -648,7 +628,7 @@ namespace {
         &&  pos.non_pawn_material(pos.side_to_move()))
         return eval - FutilityMargins[depth][0];
 
-    // Step 8. Null move search with verification search (is omitted in PV nodes)
+    // Step 7. Null move search with verification search (is omitted in PV nodes)
     if (   !PvNode
         && !ss->skipNullMove
         &&  depth > ONE_PLY
@@ -708,7 +688,7 @@ namespace {
         }
     }
 
-    // Step 9. ProbCut (is omitted in PV nodes)
+    // Step 8. ProbCut (is omitted in PV nodes)
     // If we have a very good capture (i.e. SEE > seeValues[captured_piece_type])
     // and a reduced search returns a value much above beta, we can (almost) safely
     // prune the previous move.
@@ -741,7 +721,7 @@ namespace {
             }
     }
 
-    // Step 10. Internal iterative deepening
+    // Step 9. Internal iterative deepening
     if (   depth >= (PvNode ? 5 * ONE_PLY : 8 * ONE_PLY)
         && ttMove == MOVE_NONE
         && (PvNode || (!inCheck && ss->staticEval + Value(256) >= beta)))
@@ -769,7 +749,7 @@ split_point_start: // At split points actual search starts from here
                            && (tte->type() & BOUND_LOWER)
                            &&  tte->depth() >= depth - 3 * ONE_PLY;
 
-    // Step 11. Loop through moves
+    // Step 10. Loop through moves
     // Loop through all pseudo-legal moves until no moves remain or a beta cutoff occurs
     while ((move = mp.next_move<SpNode>()) != MOVE_NONE)
     {
@@ -818,7 +798,7 @@ split_point_start: // At split points actual search starts from here
                      && (  pos.non_pawn_material(WHITE) + pos.non_pawn_material(BLACK)
                          - PieceValue[MG][pos.piece_on(to_sq(move))] == VALUE_ZERO));
 
-      // Step 12. Extend checks and, in PV nodes, also dangerous moves
+      // Step 11. Extend checks and, in PV nodes, also dangerous moves
       if (PvNode && dangerous)
           ext = ONE_PLY;
 
@@ -852,7 +832,7 @@ split_point_start: // At split points actual search starts from here
       // Update current move (this must be done after singular extension search)
       newDepth = depth - ONE_PLY + ext;
 
-      // Step 13. Futility pruning (is omitted in PV nodes)
+      // Step 12. Futility pruning (is omitted in PV nodes)
       if (   !PvNode
           && !captureOrPromotion
           && !inCheck
@@ -914,10 +894,10 @@ split_point_start: // At split points actual search starts from here
       if (!SpNode && !captureOrPromotion && playedMoveCount < 64)
           movesSearched[playedMoveCount++] = move;
 
-      // Step 14. Make the move
+      // Step 13. Make the move
       pos.do_move(move, st, ci, givesCheck);
 
-      // Step 15. Reduced depth search (LMR). If the move fails high will be
+      // Step 14. Reduced depth search (LMR). If the move fails high will be
       // re-searched at full depth.
       if (    depth > 3 * ONE_PLY
           && !pvMove
@@ -940,7 +920,7 @@ split_point_start: // At split points actual search starts from here
       else
           doFullDepthSearch = !pvMove;
 
-      // Step 16. Full depth search, when LMR is skipped or fails high
+      // Step 15. Full depth search, when LMR is skipped or fails high
       if (doFullDepthSearch)
       {
           if (SpNode)
@@ -960,12 +940,12 @@ split_point_start: // At split points actual search starts from here
                           givesCheck ? -qsearch<PV,  true>(pos, ss+1, -beta, -alpha, DEPTH_ZERO)
                                      : -qsearch<PV, false>(pos, ss+1, -beta, -alpha, DEPTH_ZERO)
                                      : - search<PV>(pos, ss+1, -beta, -alpha, newDepth);
-      // Step 17. Undo move
+      // Step 16. Undo move
       pos.undo_move(move);
 
       assert(value > -VALUE_INFINITE && value < VALUE_INFINITE);
 
-      // Step 18. Check for new best move
+      // Step 17. Check for new best move
       if (SpNode)
       {
           splitPoint->mutex.lock();
@@ -1025,7 +1005,7 @@ split_point_start: // At split points actual search starts from here
           }
       }
 
-      // Step 19. Check for splitting the search
+      // Step 18. Check for splitting the search
       if (   !SpNode
           &&  depth >= Threads.minimumSplitDepth
           &&  Threads.available_slave(thisThread)
@@ -1043,7 +1023,7 @@ split_point_start: // At split points actual search starts from here
     if (SpNode)
         return bestValue;
 
-    // Step 20. Check for mate and stalemate
+    // Step 19. Check for mate and stalemate
     // All legal moves have been searched and if there are no legal moves, it
     // must be mate or stalemate. Note that we can have a false positive in
     // case of Signals.stop or thread.cutoff_occurred() are set, but this is

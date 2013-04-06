@@ -819,11 +819,11 @@ split_point_start: // At split points actual search starts from here
                          - PieceValue[MG][pos.piece_on(to_sq(move))] == VALUE_ZERO));
 
       // Step 12. Extend checks and, in PV nodes, also dangerous moves
-      if (PvNode && dangerous)
-          ext = ONE_PLY;
-
-      else if (givesCheck && pos.see_sign(move) >= 0)
-          ext = ONE_PLY / 2;
+      if (PvNode)
+          ext = (dangerous ? ONE_PLY : DEPTH_ZERO);
+ 
+      else if (givesCheck)
+          ext = (move == ttMove ? ONE_PLY : pos.see_sign(move) >= 0 ? ONE_PLY / 2 : DEPTH_ZERO);
 
       // Singular extension search. If all moves but one fail low on a search of
       // (alpha-s, beta-s), and just one fails high on (alpha, beta), then that move

@@ -849,6 +849,32 @@ split_point_start: // At split points actual search starts from here
               ext = ONE_PLY;
       }
 
+      // Singular evasion extension in lower depths
+      if (   !RootNode
+          && !SpNode
+          && !singularExtensionNode
+          &&  inCheck
+          && !ext
+          && !excludedMove
+          &&  moveCount == 1)
+      {
+          MovePicker mp2(pos, MOVE_NONE, depth, Hist, ss, PvNode ? -VALUE_INFINITE : beta);
+          Move m;
+          int counter = 0;
+
+          while ((m = mp2.next_move<false>()) != MOVE_NONE)
+          {
+              if (   (captureOrPromotion || pos.see_sign(m) >= 0)
+                  &&  pos.pl_move_is_legal(m, ci.pinned))
+              {
+                  counter++;
+              }
+          }
+        
+          if (counter <= 1)
+              ext = ONE_PLY;
+      }
+
       // Update current move (this must be done after singular extension search)
       newDepth = depth - ONE_PLY + ext;
 

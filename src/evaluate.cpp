@@ -657,7 +657,7 @@ Value do_evaluate(const Position& pos, Value& margin) {
             {
                 // Is there a half-open file between the king and the edge of the board?
                 if (!ei.pi->has_open_file_to_right(Us, file_of(ksq)))
-                    score -= make_score(pos.can_castle(Us) ? (TrappedRookPenalty - mob * 16) / 2
+                    score -= make_score(pos.can_castle(Us) && pos. ? (TrappedRookPenalty - mob * 4) / 8
                                                            : (TrappedRookPenalty - mob * 16), 0);
             }
             else if (    file_of(ksq) <= FILE_D

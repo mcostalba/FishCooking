@@ -40,7 +40,7 @@
 template<bool Gain>
 struct Stats {
 
-  static const Value Max = Value(2000);
+  static const Value Max = Value(1 << 28);
 
   const Value* operator[](Piece p) const { return &table[p][0]; }
   void clear() { memset(table, 0, sizeof(table)); }

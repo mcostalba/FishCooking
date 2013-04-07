@@ -679,7 +679,7 @@ namespace {
             if (nullValue >= VALUE_MATE_IN_MAX_PLY)
                 nullValue = beta;
 
-            if (depth < 6 * ONE_PLY)
+            if (depth < 12 * ONE_PLY)
                 return nullValue;
 
             // Do verification search at high depths
@@ -876,7 +876,7 @@ split_point_start: // At split points actual search starts from here
           // but fixing this made program slightly weaker.
           Depth predictedDepth = newDepth - reduction<PvNode>(depth, moveCount);
           futilityValue =  ss->staticEval + ss->evalMargin + futility_margin(predictedDepth, moveCount)
-                         + 2 * Gain[pos.piece_moved(move)][to_sq(move)];
+                         + Gain[pos.piece_moved(move)][to_sq(move)];
 
           if (futilityValue < beta)
           {

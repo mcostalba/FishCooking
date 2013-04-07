@@ -21,6 +21,7 @@
 #include <iomanip>
 #include <sstream>
 #include <algorithm>
+#include <iostream>
 
 #include "bitcount.h"
 #include "evaluate.h"
@@ -167,8 +168,8 @@ namespace {
   const Score RookOpenFileBonus     = make_score(43, 21);
   const Score RookHalfOpenFileBonus = make_score(19, 10);
 
-  const Score PawnKingWithQueen    = make_score(268, 256);
-  const Score PawnKingWithoutQueen = make_score(148, 256);
+  Score PawnKingWithQueen    = make_score(275, 256);
+  Score PawnKingWithoutQueen = make_score(128, 256);
 
   // Penalty for rooks trapped inside a friendly king which has lost the
   // right to castle.
@@ -753,7 +754,7 @@ Value do_evaluate(const Position& pos, Value& margin) {
   // evaluate_king<>() assigns bonuses and penalties to a king of a given color
 
   template<Color Us, bool Trace>
-  Score evaluate_king(const Position& pos, EvalInfo& ei, Value margins[]) {
+  Score evaluate_king(const Position& pos, EvalInfo& ei, Value margins[])  {
 
     const Color Them = (Us == WHITE ? BLACK : WHITE);
 
@@ -761,11 +762,25 @@ Value do_evaluate(const Position& pos, Value& margin) {
     int attackUnits;
     const Square ksq = pos.king_square(Us);
 
+
+	static int preAv;
+	static int posAv;
+	static int tRuns;
+
+	tRuns++;
+
     // King shelter and enemy pawns storm
     Score score = ei.pi->king_safety<Us>(pos, ksq);
 
+	preAv += (int)interpolate(score, ei.mi->game_phase(), SCALE_FACTOR_NORMAL);
+
 	score = apply_weight(score,
 		((pos.pieces(Them, QUEEN) > 0) ? PawnKingWithQueen : PawnKingWithoutQueen));
+
+	posAv += (int)interpolate(score, ei.mi->game_phase(), SCALE_FACTOR_NORMAL);
+
+	if(tRuns % 10000 == 0)
+		sync_cout << "Pre: " << (double)preAv / tRuns << "; Post: " << (double)posAv / tRuns << sync_endl;
 
     // King safety. This is quite complicated, and is almost certainly far
     // from optimally tuned.

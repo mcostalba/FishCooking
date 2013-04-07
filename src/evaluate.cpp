@@ -762,25 +762,30 @@ Value do_evaluate(const Position& pos, Value& margin) {
     int attackUnits;
     const Square ksq = pos.king_square(Us);
 
-
+	/*
 	static int preAv;
 	static int posAv;
 	static int tRuns;
 
 	tRuns++;
+	*/
 
     // King shelter and enemy pawns storm
     Score score = ei.pi->king_safety<Us>(pos, ksq);
 
+	/*
 	preAv += (int)interpolate(score, ei.mi->game_phase(), SCALE_FACTOR_NORMAL);
+	*/
 
 	score = apply_weight(score,
 		((pos.pieces(Them, QUEEN) > 0) ? PawnKingWithQueen : PawnKingWithoutQueen));
 
+	/*
 	posAv += (int)interpolate(score, ei.mi->game_phase(), SCALE_FACTOR_NORMAL);
 
 	if(tRuns % 10000 == 0)
 		sync_cout << "Pre: " << (double)preAv / tRuns << "; Post: " << (double)posAv / tRuns << sync_endl;
+	*/
 
     // King safety. This is quite complicated, and is almost certainly far
     // from optimally tuned.

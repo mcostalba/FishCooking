@@ -924,6 +924,9 @@ Value do_evaluate(const Position& pos, Value& margin) {
                     // if no, somewhat smaller bonus.
                     ebonus += Value(rr * ((unsafeSquares & defendedSquares) == unsafeSquares ? 13 : 8));
             }
+			else if (type_of(pos.piece_on(blockSq)) == BISHOP) 
+				ebonus -= Value(r * 11);
+
         } // rr != 0
 
         // Increase the bonus if the passed pawn is supported by a friendly pawn

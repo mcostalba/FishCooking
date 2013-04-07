@@ -527,6 +527,8 @@ Value do_evaluate(const Position& pos, Value& margin) {
         if (   !pos.pieces(Them, KNIGHT)
             && !(same_color_squares(s) & pos.pieces(Them, BISHOP)))
             bonus += bonus + bonus / 2;
+		else if(pos.pieces(Them, KNIGHT))
+			bonus += bonus / 4;
         else
             bonus += bonus / 2;
     }

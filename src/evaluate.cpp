@@ -293,11 +293,6 @@ namespace Eval {
 
     int KingDanger[] = { KingDangerWeights[0], KingDangerWeights[1] };
 
-    // If running in analysis mode, make sure we use symmetrical king safety.
-    // We do so by replacing both KingDanger weights by their average.
-    if (Options["UCI_AnalyseMode"])
-        KingDanger[0] = KingDanger[1] = (KingDanger[0] + KingDanger[1]) / 2;
-
     const int MaxSlope = 30;
     const int Peak = 1280;
 

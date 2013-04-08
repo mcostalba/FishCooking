@@ -81,6 +81,18 @@ namespace {
   #undef S
   #undef V
 
+  const Bitboard WhiteSqExtendedCenter = 
+	  (1ULL << SQ_D3) | (1ULL << SQ_F3) |
+	  (1ULL << SQ_C4) | (1ULL << SQ_E4) |
+	  (1ULL << SQ_D5) | (1ULL << SQ_F5) |
+	  (1ULL << SQ_C6) | (1ULL << SQ_E6);
+
+  const Bitboard BlackSqExtendedCenter =
+	  (1ULL << SQ_C3) | (1ULL << SQ_E3) |
+	  (1ULL << SQ_D4) | (1ULL << SQ_F4) |
+	  (1ULL << SQ_C5) | (1ULL << SQ_E5) |
+	  (1ULL << SQ_D6) | (1ULL << SQ_F6);
+
   template<Color Us>
   Score evaluate_pawns(const Position& pos, Bitboard ourPawns,
                        Bitboard theirPawns, Pawns::Entry* e) {
@@ -175,6 +187,12 @@ namespace {
         if (candidate)
             value += CandidateBonus[relative_rank(Us, s)];
     }
+
+	e->ecpcW[Us]   = popcount<Max15>(ourPawns   & WhiteSqExtendedCenter);
+	e->ecpcW[Them] = popcount<Max15>(theirPawns & WhiteSqExtendedCenter);
+
+	e->ecpcB[Us]   = popcount<Max15>(ourPawns   & BlackSqExtendedCenter);
+	e->ecpcB[Them] = popcount<Max15>(theirPawns & BlackSqExtendedCenter);
 
     return value;
   }

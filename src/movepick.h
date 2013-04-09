@@ -76,7 +76,7 @@ class MovePicker {
 public:
   MovePicker(const Position&, Move, Depth, const History&, Search::Stack*, Value);
   MovePicker(const Position&, Move, Depth, const History&, Square);
-  MovePicker(const Position&, Move, const History&, PieceType);
+  MovePicker(const Position&, Move, const History&, Value);
   template<bool SpNode> Move next_move();
 
 private:

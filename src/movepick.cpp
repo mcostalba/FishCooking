@@ -135,7 +135,7 @@ MovePicker::MovePicker(const Position& p, Move ttm, Depth d, const History& h,
   end += (ttMove != MOVE_NONE);
 }
 
-MovePicker::MovePicker(const Position& p, Move ttm, const History& h, PieceType pt)
+MovePicker::MovePicker(const Position& p, Move ttm, const History& h, Value threshold)
                        : pos(p), Hist(h), cur(moves), end(moves) {
 
   assert(!pos.checkers());
@@ -143,7 +143,7 @@ MovePicker::MovePicker(const Position& p, Move ttm, const History& h, PieceType 
   phase = PROBCUT;
 
   // In ProbCut we generate only captures better than parent's captured piece
-  captureThreshold = PieceValue[MG][pt];
+  captureThreshold = threshold;
   ttMove = (ttm && pos.is_pseudo_legal(ttm) ? ttm : MOVE_NONE);
 
   if (ttMove && (!pos.is_capture(ttMove) ||  pos.see(ttMove) <= captureThreshold))

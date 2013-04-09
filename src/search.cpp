@@ -726,7 +726,7 @@ namespace {
         assert((ss-1)->currentMove != MOVE_NONE);
         assert((ss-1)->currentMove != MOVE_NULL);
 
-        MovePicker mp(pos, ttMove, Hist, pos.captured_piece_type());
+        MovePicker mp(pos, ttMove, Hist, rbeta - ss->staticEval);
         CheckInfo ci(pos);
 
         while ((move = mp.next_move<false>()) != MOVE_NONE)

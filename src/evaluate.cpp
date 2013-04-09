@@ -179,7 +179,7 @@ namespace {
   // Penalty for an undefended bishop or knight
   const Score UndefendedMinorPenalty = make_score(25, 10);
 
-  const Score BadBishopCoeff = make_score(23, 5);
+  const Score BadBishopCoeff = make_score(11, 5);
 
   // The SpaceMask[Color] contains the area of the board which is considered
   // by the space evaluation. In the middle game, each side is given a bonus

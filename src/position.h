@@ -59,6 +59,8 @@ struct StateInfo {
   Bitboard checkersBB;
   PieceType capturedType;
   StateInfo* previous;
+
+  ScaleFactor meta_scale;
 };
 
 
@@ -181,6 +183,8 @@ public:
   void set_nodes_searched(int64_t n);
   template<bool SkipRepetition> bool is_draw() const;
   int plys_since_action() const;
+  ScaleFactor get_meta_scale() const;
+  void recalculate_meta();
 
   // Position consistency check, for debugging
   bool pos_is_ok(int* failedStep = NULL) const;

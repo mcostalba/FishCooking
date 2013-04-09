@@ -32,6 +32,7 @@
 #include "rkiss.h"
 #include "thread.h"
 #include "tt.h"
+#include "evaluate.h"
 
 using std::string;
 using std::cout;
@@ -173,6 +174,10 @@ Position& Position::operator=(const Position& pos) {
 }
 
 
+void Position::recalculate_meta() {
+	st->meta_scale = Eval::meta_scale(*this);
+}
+
 /// Position::set() initializes the position object with the given FEN string.
 /// This function is not very robust - make sure that input FENs are correct,
 /// this is assumed to be the responsibility of the GUI.
@@ -280,6 +285,7 @@ void Position::set(const string& fenStr, bool isChess960, Thread* th) {
 
   // 5-6. Halfmove clock and fullmove number
   ss >> std::skipws >> st->rule50 >> gamePly;
+  recalculate_meta();
 
   // Convert from fullmove starting from 1 to ply starting from 0,
   // handle also common incorrect FEN with fullmove = 0.
@@ -742,6 +748,7 @@ void Position::do_move(Move m, StateInfo& newSt, const CheckInfo& ci, bool moveI
   gamePly++;
   st->rule50++;
   st->pliesFromNull++;
+  recalculate_meta();
 
   Color us = sideToMove;
   Color them = ~us;
@@ -824,6 +831,7 @@ void Position::do_move(Move m, StateInfo& newSt, const CheckInfo& ci, bool moveI
 
       // Reset rule 50 counter
       st->rule50 = 0;
+	  recalculate_meta();
   }
 
   // Update hash key
@@ -916,6 +924,7 @@ void Position::do_move(Move m, StateInfo& newSt, const CheckInfo& ci, bool moveI
 
       // Reset rule 50 draw counter
       st->rule50 = 0;
+	  recalculate_meta();
   }
 
   // Update incremental scores
@@ -1113,6 +1122,7 @@ void Position::do_null_move(StateInfo& newSt) {
 
   st->rule50++;
   st->pliesFromNull = 0;
+  recalculate_meta();
 
   sideToMove = ~sideToMove;
 
@@ -1349,6 +1359,10 @@ Score Position::compute_psq_score() const {
 
 int Position::plys_since_action() const {
 	return st->rule50;
+}
+
+ScaleFactor Position::get_meta_scale() const {
+	return st->meta_scale;
 }
 
 /// Position::compute_non_pawn_material() computes the total non-pawn middle

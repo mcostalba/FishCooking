@@ -279,9 +279,9 @@ namespace Eval {
 
   ScaleFactor meta_scale (const Position& pos) {
 	  int alpha = 100 - pos.plys_since_action();
-	  int beta  = (alpha * alpha * alpha * alpha / 2000000);
+	  int beta  = ((alpha * alpha * alpha * alpha) / 2000000);
 
-	  return (ScaleFactor)(beta  + pos.plys_since_action() / 1000 + 20);
+	  return (ScaleFactor)(beta  + (pos.plys_since_action() / 1000) + 5);
   }
 
   /// init() computes evaluation weights from the corresponding UCI parameters

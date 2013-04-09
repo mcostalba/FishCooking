@@ -48,11 +48,10 @@ Value PieceValue[PHASE_NB][PIECE_NB] = {
 
 namespace Zobrist {
 
-Key psq[COLOR_NB][PIECE_TYPE_NB][SQUARE_NB];
+Key psq[COLOR_NB + 1][PIECE_TYPE_NB][SQUARE_NB];
 Key enpassant[FILE_NB];
 Key castle[CASTLE_RIGHT_NB];
 Key side;
-Key exclusion;
 
 /// init() initializes at startup the various arrays used to compute hash keys
 /// and the piece square tables. The latter is a two-step operation: First, the
@@ -64,7 +63,7 @@ void init() {
 
   RKISS rk;
 
-  for (Color c = WHITE; c <= BLACK; c++)
+  for (Color c = WHITE; c <= NO_COLOR; c++)
       for (PieceType pt = PAWN; pt <= KING; pt++)
           for (Square s = SQ_A1; s <= SQ_H8; s++)
               psq[c][pt][s] = rk.rand<Key>();
@@ -83,7 +82,6 @@ void init() {
   }
 
   side = rk.rand<Key>();
-  exclusion  = rk.rand<Key>();
 
   for (PieceType pt = PAWN; pt <= KING; pt++)
   {

@@ -335,11 +335,10 @@ inline Score apply_weight(Score v, Score w) {
 
 namespace Zobrist {
 
-  extern Key psq[COLOR_NB][PIECE_TYPE_NB][SQUARE_NB];
+  extern Key psq[COLOR_NB + 1][PIECE_TYPE_NB][SQUARE_NB];
   extern Key enpassant[FILE_NB];
   extern Key castle[CASTLE_RIGHT_NB];
   extern Key side;
-  extern Key exclusion;
 
   void init();
 }

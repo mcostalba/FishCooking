@@ -163,7 +163,7 @@ public:
 
   // Accessing hash keys
   Key key() const;
-  Key exclusion_key() const;
+  Key exclusion_key(const Move m) const;
   Key pawn_key() const;
   Key material_key() const;
 
@@ -346,8 +346,9 @@ inline Key Position::key() const {
   return st->key;
 }
 
-inline Key Position::exclusion_key() const {
-  return st->key ^ Zobrist::exclusion;
+inline Key Position::exclusion_key(const Move m) const {
+  return st->key ^ Zobrist::psq[NO_COLOR][type_of(piece_on(from_sq(m)))][from_sq(m)]
+                 ^ Zobrist::psq[NO_COLOR][type_of(piece_on(from_sq(m)))][to_sq(m)];
 }
 
 inline Key Position::pawn_key() const {

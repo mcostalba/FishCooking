@@ -18,7 +18,6 @@
 */
 
 #include <cassert>
-#include <iostream>
 
 #include "bitboard.h"
 #include "bitcount.h"
@@ -138,19 +137,17 @@ namespace {
         if (passed && !doubled)
             e->passedPawns[Us] |= s;
 
-		
-
         // Score this pawn
-        if (isolated) 
+        if (isolated)
             value -= IsolatedPawnPenalty[opposed][f];
 
-        if (doubled) 
+        if (doubled)
             value -= DoubledPawnPenalty[opposed][f];
 
-        if (backward) 
+        if (backward)
             value -= BackwardPawnPenalty[opposed][f];
 
-        if (chain) 
+        if (chain)
             value += ChainBonus[f];
 
         if (candidate)

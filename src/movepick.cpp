@@ -1,7 +1,7 @@
 /*
   Stockfish, a UCI chess playing engine derived from Glaurung 2.1
   Copyright (C) 2004-2008 Tord Romstad (Glaurung author)
-  Copyright (C) 2008-2012 Marco Costalba, Joona Kiiski, Tord Romstad
+  Copyright (C) 2008-2013 Marco Costalba, Joona Kiiski, Tord Romstad
 
   Stockfish is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -374,4 +374,4 @@ Move MovePicker::next_move<false>() {
 /// from the split point's shared MovePicker object. This function is not thread
 /// safe so must be lock protected by the caller.
 template<>
-Move MovePicker::next_move<true>() { return ss->sp->movePicker->next_move<false>(); }
+Move MovePicker::next_move<true>() { return ss->splitPoint->movePicker->next_move<false>(); }

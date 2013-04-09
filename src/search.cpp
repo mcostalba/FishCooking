@@ -823,7 +823,9 @@ split_point_start: // At split points actual search starts from here
           ext = ONE_PLY;
 
       else if (givesCheck && pos.see_sign(move) >= 0)
-          ext = ONE_PLY / 2;
+          // Full ply only when not doing singular extensions.
+          // Avoids search tree explosion.
+          ext = (depth >= 8 * ONE_PLY ? ONE_PLY / 2 : ONE_PLY);
 
       // Singular extension search. If all moves but one fail low on a search of
       // (alpha-s, beta-s), and just one fails high on (alpha, beta), then that move

@@ -18,6 +18,7 @@
 */
 
 #include <cassert>
+#include <iostream>
 
 #include "bitboard.h"
 #include "bitcount.h"
@@ -52,8 +53,8 @@ namespace {
 
   // Pawn chain membership bonus by file
   const Score ChainBonus[FILE_NB] = {
-    S(11,-1), S(13,-1), S(13,-1), S(14,-1),
-    S(14,-1), S(13,-1), S(13,-1), S(11,-1)
+    S(11, 0), S(13, 0), S(13, 0), S(14, 0),
+    S(14, 0), S(13, 0), S(13, 0), S(11, 0)
   };
 
   // Candidate passed pawn bonus by rank
@@ -106,8 +107,8 @@ namespace {
         // This file cannot be half open
         e->halfOpenFiles[Us] &= ~(1 << f);
 
-        // Our rank plus previous one. Used for chain detection
-        b = rank_bb(r) | rank_bb(Us == WHITE ? r - Rank(1) : r + Rank(1));
+        // Our rank plus up and down ranks. Used for chain detection
+        b = rank_bb(r) | rank_bb(r + Rank(1)) | rank_bb(r - Rank(1));
 
         // Flag the pawn as passed, isolated, doubled or member of a pawn
         // chain (but not the backward one).
@@ -118,30 +119,8 @@ namespace {
         passed   = !(theirPawns & passed_pawn_mask(Us, s));
 
         // Test for backward pawn
-        backward = false;
-
-        // If the pawn is passed, isolated, or member of a pawn chain it cannot
-        // be backward. If there are friendly pawns behind on adjacent files
-        // or if can capture an enemy pawn it cannot be backward either.
-        if (   !(passed | isolated | chain)
-            && !(ourPawns & attack_span_mask(Them, s))
-            && !(pos.attacks_from<PAWN>(s, Us) & theirPawns))
-        {
-            // We now know that there are no friendly pawns beside or behind this
-            // pawn on adjacent files. We now check whether the pawn is
-            // backward by looking in the forward direction on the adjacent
-            // files, and seeing whether we meet a friendly or an enemy pawn first.
-            b = pos.attacks_from<PAWN>(s, Us);
-
-            // Note that we are sure to find something because pawn is not passed
-            // nor isolated, so loop is potentially infinite, but it isn't.
-            while (!(b & (ourPawns | theirPawns)))
-                Us == WHITE ? b <<= 8 : b >>= 8;
-
-            // The friendly pawn needs to be at least two ranks closer than the
-            // enemy pawn in order to help the potentially backward pawn advance.
-            backward = (b | (Us == WHITE ? b << 8 : b >> 8)) & theirPawns;
-        }
+		Bitboard supportScan = adjacent_files_bb(f) & InFrontBB[Them][relative_rank(Us, relative_rank(Us, r) + (Rank)1)];
+		backward = !isolated && !doubled && !(ourPawns & supportScan);
 
         assert(opposed | passed | (attack_span_mask(Us, s) & theirPawns));
 
@@ -159,21 +138,33 @@ namespace {
         if (passed && !doubled)
             e->passedPawns[Us] |= s;
 
+		
+
         // Score this pawn
-        if (isolated)
+        if (isolated) {
             value -= IsolatedPawnPenalty[opposed][f];
+			sync_cout << ((Us == WHITE) ? "White" : "Black") << "; Issolated; " << file_to_char(f) << rank_to_char(r) << sync_endl;
+		}
 
-        if (doubled)
+        if (doubled) {
             value -= DoubledPawnPenalty[opposed][f];
+			sync_cout << ((Us == WHITE) ? "White" : "Black") << "; Doubled; " << file_to_char(f) << rank_to_char(r) << sync_endl;
+		}
 
-        if (backward)
+        if (backward) {
             value -= BackwardPawnPenalty[opposed][f];
+			sync_cout << ((Us == WHITE) ? "White" : "Black") << "; Backward; " << file_to_char(f) << rank_to_char(r) << sync_endl;
+		}
 
-        if (chain)
+        if (chain && !backward) {
             value += ChainBonus[f];
+			sync_cout << ((Us == WHITE) ? "White" : "Black") << "; Chain; " << file_to_char(f) << rank_to_char(r) << sync_endl;
+		}
 
-        if (candidate)
+        if (candidate) {
             value += CandidateBonus[relative_rank(Us, s)];
+			sync_cout << ((Us == WHITE) ? "White" : "Black") << "; Canidate; " << file_to_char(f) << rank_to_char(r) << sync_endl;
+		}
     }
 
     return value;

@@ -120,7 +120,7 @@ namespace {
 
         // Test for backward pawn
 		Bitboard supportScan = adjacent_files_bb(f) & InFrontBB[Them][relative_rank(Us, relative_rank(Us, r) + (Rank)1)];
-		backward = !isolated && !doubled && !(ourPawns & supportScan);
+		backward = !isolated && !doubled && !backward && !(ourPawns & supportScan);
 
         assert(opposed | passed | (attack_span_mask(Us, s) & theirPawns));
 
@@ -141,30 +141,20 @@ namespace {
 		
 
         // Score this pawn
-        if (isolated) {
+        if (isolated) 
             value -= IsolatedPawnPenalty[opposed][f];
-			sync_cout << ((Us == WHITE) ? "White" : "Black") << "; Issolated; " << file_to_char(f) << rank_to_char(r) << sync_endl;
-		}
 
-        if (doubled) {
+        if (doubled) 
             value -= DoubledPawnPenalty[opposed][f];
-			sync_cout << ((Us == WHITE) ? "White" : "Black") << "; Doubled; " << file_to_char(f) << rank_to_char(r) << sync_endl;
-		}
 
-        if (backward) {
+        if (backward) 
             value -= BackwardPawnPenalty[opposed][f];
-			sync_cout << ((Us == WHITE) ? "White" : "Black") << "; Backward; " << file_to_char(f) << rank_to_char(r) << sync_endl;
-		}
 
-        if (chain && !backward) {
+        if (chain) 
             value += ChainBonus[f];
-			sync_cout << ((Us == WHITE) ? "White" : "Black") << "; Chain; " << file_to_char(f) << rank_to_char(r) << sync_endl;
-		}
 
-        if (candidate) {
+        if (candidate)
             value += CandidateBonus[relative_rank(Us, s)];
-			sync_cout << ((Us == WHITE) ? "White" : "Black") << "; Canidate; " << file_to_char(f) << rank_to_char(r) << sync_endl;
-		}
     }
 
     return value;

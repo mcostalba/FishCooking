@@ -28,6 +28,7 @@ namespace Eval {
 
 extern void init();
 extern Value evaluate(const Position& pos, Value& margin);
+extern ScaleFactor meta_scale(const Position& pos);
 extern std::string trace(const Position& pos);
 
 }

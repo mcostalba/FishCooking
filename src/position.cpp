@@ -1347,6 +1347,9 @@ Score Position::compute_psq_score() const {
   return score;
 }
 
+int Position::plys_since_action() const {
+	return st->rule50;
+}
 
 /// Position::compute_non_pawn_material() computes the total non-pawn middle
 /// game material value for the given side. Material values are updated

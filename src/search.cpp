@@ -48,6 +48,7 @@ namespace Search {
 
 using std::string;
 using Eval::evaluate;
+using Eval::meta_scale;
 using namespace Search;
 
 namespace {
@@ -609,7 +610,7 @@ namespace {
                  ss->staticEval, ss->evalMargin);
     }
 
-	ScaleFactor mScaler = Eval::meta_scale(pos);
+	ScaleFactor mScaler = meta_scale(pos);
 
 	eval           = (          eval * mScaler) / SCALE_FACTOR_NORMAL;
 	ss->staticEval = (ss->staticEval * mScaler) / SCALE_FACTOR_NORMAL;

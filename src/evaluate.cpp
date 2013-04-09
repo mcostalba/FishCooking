@@ -304,8 +304,8 @@ namespace Eval {
     {
         t = std::min(Peak, std::min(int(0.4 * i * i), t + MaxSlope));
 
-        KingDangerTable[1][i] = apply_weight(make_score(t, t), make_score(Weights[KingDangerUs], Weights[KingDangerUs] / 4));
-        KingDangerTable[0][i] = apply_weight(make_score(t, t), make_score(Weights[KingDangerThem], Weights[KingDangerThem] / 4));
+        KingDangerTable[1][i] = apply_weight(make_score(t, t), make_score(mg_value(Weights[KingDangerUs]), mg_value(Weights[KingDangerUs]) / 4));
+        KingDangerTable[0][i] = apply_weight(make_score(t, t), make_score(mg_value(Weights[KingDangerThem]), mg_value(Weights[KingDangerThem]) / 4));
     }
   }
 

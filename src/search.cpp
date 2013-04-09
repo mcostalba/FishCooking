@@ -609,11 +609,11 @@ namespace {
                  ss->staticEval, ss->evalMargin);
     }
 
-	ScaleFactor meta_scale = Eval::meta_scale(pos);
+	ScaleFactor mScaler = Eval::meta_scale(pos);
 
-	eval           = (          eval * meta_scale) / SCALE_FACTOR_NORMAL;
-	ss->staticEval = (ss->staticEval * meta_scale) / SCALE_FACTOR_NORMAL;
-	ss->evalMargin = (ss->evalMargin * meta_scale) / SCALE_FACTOR_NORMAL;
+	eval           = (          eval * mScaler) / SCALE_FACTOR_NORMAL;
+	ss->staticEval = (ss->staticEval * mScaler) / SCALE_FACTOR_NORMAL;
+	ss->evalMargin = (ss->evalMargin * mScaler) / SCALE_FACTOR_NORMAL;
 
     // Update gain for the parent non-capture move given the static position
     // evaluation before and after the move.

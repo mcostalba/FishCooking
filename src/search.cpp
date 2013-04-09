@@ -610,9 +610,12 @@ namespace {
                  ss->staticEval, ss->evalMargin);
     }
 
-	eval           = (          eval * pos.get_meta_scale()) / SCALE_FACTOR_NORMAL;
-	ss->staticEval = (ss->staticEval * pos.get_meta_scale()) / SCALE_FACTOR_NORMAL;
-	ss->evalMargin = (ss->evalMargin * pos.get_meta_scale()) / SCALE_FACTOR_NORMAL;
+	if(eval < VALUE_KNOWN_WIN && eval > -VALUE_KNOWN_WIN)
+		eval           = (eval * pos.get_meta_scale()) / SCALE_FACTOR_NORMAL;
+	if(ss->staticEval < VALUE_KNOWN_WIN && ss->staticEval > -VALUE_KNOWN_WIN)
+		ss->staticEval = (ss->staticEval * pos.get_meta_scale()) / SCALE_FACTOR_NORMAL;
+	if(ss->evalMargin < VALUE_KNOWN_WIN && ss->evalMargin > -VALUE_KNOWN_WIN)
+		ss->evalMargin = (ss->evalMargin * pos.get_meta_scale()) / SCALE_FACTOR_NORMAL;
 
     // Update gain for the parent non-capture move given the static position
     // evaluation before and after the move.

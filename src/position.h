@@ -180,7 +180,7 @@ public:
   int64_t nodes_searched() const;
   void set_nodes_searched(int64_t n);
   template<bool SkipRepetition> bool is_draw() const;
-  int Position::plys_since_action() const;
+  int plys_since_action() const;
 
   // Position consistency check, for debugging
   bool pos_is_ok(int* failedStep = NULL) const;

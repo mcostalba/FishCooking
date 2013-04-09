@@ -535,17 +535,6 @@ namespace {
         // Step 2. Check for aborted search and immediate draw
         if (Signals.stop || pos.is_draw<false>() || ss->ply > MAX_PLY)
             return DrawValue[pos.side_to_move()];
-
-        // Step 3. Mate distance pruning. Even if we mate at the next move our score
-        // would be at best mate_in(ss->ply+1), but if alpha is already bigger because
-        // a shorter mate was found upward in the tree then there is no need to search
-        // further, we will never beat current alpha. Same logic but with reversed signs
-        // applies also in the opposite condition of being mated instead of giving mate,
-        // in this case return a fail-high score.
-        alpha = std::max(mated_in(ss->ply), alpha);
-        beta = std::min(mate_in(ss->ply+1), beta);
-        if (alpha >= beta)
-            return alpha;
     }
 
     // Step 4. Transposition table lookup

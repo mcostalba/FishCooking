@@ -606,8 +606,7 @@ Value do_evaluate(const Position& pos, Value& margin) {
         {
             // Penalize bishops for sitting on the same squares as pawns
             Color bishopColor = color_of(s);
-            score -= (ei.pi->pawn_bishop_weight<Us>(bishopColor) + 
-                      ei.pi->pawn_bishop_weight<Them>(bishopColor) / 2) * make_score(3, 2);
+            score -= ei.pi->pawn_bishop_weight<Us>(bishopColor) * make_score(3, 2);
             score += popcount<Max15>(pos.pieces(Them, PAWN) & ~ei.attackedBy[Them][PAWN] & 
                                      same_color_squares(s) & in_front_bb(Us, s)) * make_score(0, 5);
 						

@@ -40,8 +40,8 @@ namespace {
     Pawns::Entry* pi;
 
     // attackedBy[color][piece type] is a bitboard representing all squares
-    // attacked by a given color and piece type, attackedBy[color][0] contains
-    // all squares attacked by the given color.
+    // attacked by a given color and piece type, attackedBy[color][ALL_PIECES]
+    // contains all squares attacked by the given color.
     Bitboard attackedBy[COLOR_NB][PIECE_TYPE_NB];
 
     // kingRing[color] is the zone around the king which is considered
@@ -75,8 +75,8 @@ namespace {
   const int GrainSize = 8;
 
   // Evaluation weights, initialized from UCI options
-  enum { Mobility, PassedPawns, Space };
-  Score Weights[3];
+  enum { Mobility, PassedPawns, Space, KingDangerUs, KingDangerThem };
+  Score Weights[6];
 
   typedef Value V;
   #define S(mg, eg) make_score(mg, eg)
@@ -88,7 +88,7 @@ namespace {
   //
   // Values modified by Joona Kiiski
   const Score WeightsInternal[] = {
-      S(252, 344), S(216, 266), S(46, 0)
+      S(289, 344), S(221, 273), S(46, 0), S(271, 0), S(307, 0)
   };
 
   // MobilityBonus[PieceType][attacked] contains mobility bonuses for middle and
@@ -198,10 +198,6 @@ namespace {
   // the strength of the enemy attack are added up into an integer, which
   // is used as an index to KingDangerTable[].
   //
-  // King safety evaluation is asymmetrical and different for us (root color)
-  // and for our opponent. These values are used to init KingDangerTable.
-  const int KingDangerWeights[] = { 259, 247 };
-
   // KingAttackWeights[PieceType] contains king attack weights by piece type
   const int KingAttackWeights[] = { 0, 0, 2, 2, 3, 5 };
 
@@ -288,16 +284,11 @@ namespace Eval {
 
   void init() {
 
-    Weights[Mobility]    = weight_option("Mobility (Middle Game)", "Mobility (Endgame)", WeightsInternal[Mobility]);
-    Weights[PassedPawns] = weight_option("Passed Pawns (Middle Game)", "Passed Pawns (Endgame)", WeightsInternal[PassedPawns]);
-    Weights[Space]       = weight_option("Space", "Space", WeightsInternal[Space]);
-
-    int KingDanger[] = { KingDangerWeights[0], KingDangerWeights[1] };
-
-    // If running in analysis mode, make sure we use symmetrical king safety.
-    // We do so by replacing both KingDanger weights by their average.
-    if (Options["UCI_AnalyseMode"])
-        KingDanger[0] = KingDanger[1] = (KingDanger[0] + KingDanger[1]) / 2;
+    Weights[Mobility]       = weight_option("Mobility (Middle Game)", "Mobility (Endgame)", WeightsInternal[Mobility]);
+    Weights[PassedPawns]    = weight_option("Passed Pawns (Middle Game)", "Passed Pawns (Endgame)", WeightsInternal[PassedPawns]);
+    Weights[Space]          = weight_option("Space", "Space", WeightsInternal[Space]);
+    Weights[KingDangerUs]   = weight_option("Cowardice", "Cowardice", WeightsInternal[KingDangerUs]);
+    Weights[KingDangerThem] = weight_option("Aggressiveness", "Aggressiveness", WeightsInternal[KingDangerThem]);
 
     const int MaxSlope = 30;
     const int Peak = 1280;
@@ -306,8 +297,8 @@ namespace Eval {
     {
         t = std::min(Peak, std::min(int(0.4 * i * i), t + MaxSlope));
 
-        KingDangerTable[0][i] = apply_weight(make_score(t, 0), make_score(KingDanger[0], 0));
-        KingDangerTable[1][i] = apply_weight(make_score(t, 0), make_score(KingDanger[1], 0));
+        KingDangerTable[1][i] = apply_weight(make_score(t, 0), Weights[KingDangerUs]);
+        KingDangerTable[0][i] = apply_weight(make_score(t, 0), Weights[KingDangerThem]);
     }
   }
 
@@ -696,7 +687,7 @@ Value do_evaluate(const Position& pos, Value& margin) {
     // Undefended minors get penalized even if not under attack
     undefendedMinors =  pos.pieces(Them)
                       & (pos.pieces(BISHOP) | pos.pieces(KNIGHT))
-                      & ~ei.attackedBy[Them][0];
+                      & ~ei.attackedBy[Them][ALL_PIECES];
 
     if (undefendedMinors)
         score += UndefendedMinorPenalty;
@@ -704,7 +695,7 @@ Value do_evaluate(const Position& pos, Value& margin) {
     // Enemy pieces not defended by a pawn and under our attack
     weakEnemies =  pos.pieces(Them)
                  & ~ei.attackedBy[Them][PAWN]
-                 & ei.attackedBy[Us][0];
+                 & ei.attackedBy[Us][ALL_PIECES];
 
     if (!weakEnemies)
         return score;
@@ -743,9 +734,9 @@ Value do_evaluate(const Position& pos, Value& margin) {
     score += evaluate_pieces<QUEEN,  Us, Trace>(pos, ei, mobility, mobilityArea);
 
     // Sum up all attacked squares
-    ei.attackedBy[Us][0] =   ei.attackedBy[Us][PAWN]   | ei.attackedBy[Us][KNIGHT]
-                           | ei.attackedBy[Us][BISHOP] | ei.attackedBy[Us][ROOK]
-                           | ei.attackedBy[Us][QUEEN]  | ei.attackedBy[Us][KING];
+    ei.attackedBy[Us][ALL_PIECES] =   ei.attackedBy[Us][PAWN]   | ei.attackedBy[Us][KNIGHT]
+                                    | ei.attackedBy[Us][BISHOP] | ei.attackedBy[Us][ROOK]
+                                    | ei.attackedBy[Us][QUEEN]  | ei.attackedBy[Us][KING];
     return score;
   }
 
@@ -771,7 +762,7 @@ Value do_evaluate(const Position& pos, Value& margin) {
     {
         // Find the attacked squares around the king which has no defenders
         // apart from the king itself
-        undefended = ei.attackedBy[Them][0] & ei.attackedBy[Us][KING];
+        undefended = ei.attackedBy[Them][ALL_PIECES] & ei.attackedBy[Us][KING];
         undefended &= ~(  ei.attackedBy[Us][PAWN]   | ei.attackedBy[Us][KNIGHT]
                         | ei.attackedBy[Us][BISHOP] | ei.attackedBy[Us][ROOK]
                         | ei.attackedBy[Us][QUEEN]);
@@ -819,7 +810,7 @@ Value do_evaluate(const Position& pos, Value& margin) {
         }
 
         // Analyse enemy's safe distance checks for sliders and knights
-        safe = ~(pos.pieces(Them) | ei.attackedBy[Us][0]);
+        safe = ~(pos.pieces(Them) | ei.attackedBy[Us][ALL_PIECES]);
 
         b1 = pos.attacks_from<ROOK>(ksq) & safe;
         b2 = pos.attacks_from<BISHOP>(ksq) & safe;
@@ -906,7 +897,7 @@ Value do_evaluate(const Position& pos, Value& margin) {
             if (pos.is_empty(blockSq))
             {
                 squaresToQueen = forward_bb(Us, s);
-                defendedSquares = squaresToQueen & ei.attackedBy[Us][0];
+                defendedSquares = squaresToQueen & ei.attackedBy[Us][ALL_PIECES];
 
                 // If there is an enemy rook or queen attacking the pawn from behind,
                 // add all X-ray attacks by the rook or queen. Otherwise consider only
@@ -915,7 +906,7 @@ Value do_evaluate(const Position& pos, Value& margin) {
                     && (forward_bb(Them, s) & pos.pieces(Them, ROOK, QUEEN) & pos.attacks_from<ROOK>(s)))
                     unsafeSquares = squaresToQueen;
                 else
-                    unsafeSquares = squaresToQueen & (ei.attackedBy[Them][0] | pos.pieces(Them));
+                    unsafeSquares = squaresToQueen & (ei.attackedBy[Them][ALL_PIECES] | pos.pieces(Them));
 
                 // If there aren't enemy attacks or pieces along the path to queen give
                 // huge bonus. Even bigger if we protect the pawn's path.
@@ -992,7 +983,7 @@ Value do_evaluate(const Position& pos, Value& margin) {
             // Compute plies to queening and check direct advancement
             movesToGo = rank_distance(s, queeningSquare) - int(relative_rank(c, s) == RANK_2);
             oppMovesToGo = square_distance(pos.king_square(~c), queeningSquare) - int(c != pos.side_to_move());
-            pathDefended = ((ei.attackedBy[c][0] & queeningPath) == queeningPath);
+            pathDefended = ((ei.attackedBy[c][ALL_PIECES] & queeningPath) == queeningPath);
 
             if (movesToGo >= oppMovesToGo && !pathDefended)
                 continue;
@@ -1139,7 +1130,7 @@ Value do_evaluate(const Position& pos, Value& margin) {
     Bitboard safe =   SpaceMask[Us]
                    & ~pos.pieces(Us, PAWN)
                    & ~ei.attackedBy[Them][PAWN]
-                   & (ei.attackedBy[Us][0] | ~ei.attackedBy[Them][0]);
+                   & (ei.attackedBy[Us][ALL_PIECES] | ~ei.attackedBy[Them][ALL_PIECES]);
 
     // Find all squares which are at most three squares behind some friendly pawn
     Bitboard behind = pos.pieces(Us, PAWN);

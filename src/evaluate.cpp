@@ -21,6 +21,7 @@
 #include <iomanip>
 #include <sstream>
 #include <algorithm>
+#include <cmath>
 
 #include "bitcount.h"
 #include "evaluate.h"
@@ -80,6 +81,8 @@ namespace {
 
   typedef Value V;
   #define S(mg, eg) make_score(mg, eg)
+
+  ScaleFactor Rule50MetaTable[100];
 
   // Internal evaluation weights. These are applied on top of the evaluation
   // weights read from UCI parameters. The purpose is to be able to change
@@ -284,6 +287,13 @@ namespace Eval {
 	  return (ScaleFactor)(beta  + (pos.plys_since_action() / 1000) + 5);
   }
 
+  ScaleFactor meta_scale_precalc (int plys_since) {
+	  float alpha = ((float)(100 - plys_since)) / 63;
+	  float beta  = std::pow(alpha, 8) + 50;
+
+	  return ScaleFactor((int)beta);
+  }
+
   /// init() computes evaluation weights from the corresponding UCI parameters
   /// and setup king tables.
 
@@ -305,6 +315,9 @@ namespace Eval {
         KingDangerTable[1][i] = apply_weight(make_score(t, 0), Weights[KingDangerUs]);
         KingDangerTable[0][i] = apply_weight(make_score(t, 0), Weights[KingDangerThem]);
     }
+
+	for (int i = 0; i < 100; i++)
+		Rule50MetaTable[i] = meta_scale_precalc(i);
   }
 
 

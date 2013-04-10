@@ -1,7 +1,7 @@
 /*
   Stockfish, a UCI chess playing engine derived from Glaurung 2.1
   Copyright (C) 2004-2008 Tord Romstad (Glaurung author)
-  Copyright (C) 2008-2012 Marco Costalba, Joona Kiiski, Tord Romstad
+  Copyright (C) 2008-2013 Marco Costalba, Joona Kiiski, Tord Romstad
 
   Stockfish is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -19,6 +19,7 @@
 
 #include <cassert>
 #include <cstring>
+#include <iomanip>
 #include <iostream>
 #include <sstream>
 #include <algorithm>
@@ -400,7 +401,8 @@ const string Position::pretty(Move move) const {
       if (piece_on(sq) != NO_PIECE)
           brd[513 - 68*rank_of(sq) + 4*file_of(sq)] = PieceToChar[piece_on(sq)];
 
-  ss << brd << "\nFen: " << fen() << "\nKey: " << st->key << "\nCheckers: ";
+  ss << brd << "\nFen: " << fen() << "\nKey: " << std::hex << std::uppercase
+     << std::setfill('0') << std::setw(16) << st->key << "\nCheckers: ";
 
   for (Bitboard b = checkers(); b; )
       ss << square_to_string(pop_lsb(&b)) << " ";
@@ -1127,10 +1129,10 @@ void Position::undo_null_move() {
 
 
 /// Position::see() is a static exchange evaluator: It tries to estimate the
-/// material gain or loss resulting from a move. There are three versions of
-/// this function: One which takes a destination square as input, one takes a
-/// move, and one which takes a 'from' and a 'to' square. The function does
-/// not yet understand promotions captures.
+/// material gain or loss resulting from a move. Parameter 'asymmThreshold' takes
+/// tempi into account. If the side who initiated the capturing sequence does the
+/// last capture, he loses a tempo and if the result is below 'asymmThreshold'
+/// the capturing sequence is considered bad.
 
 int Position::see_sign(Move m) const {
 
@@ -1145,7 +1147,7 @@ int Position::see_sign(Move m) const {
   return see(m);
 }
 
-int Position::see(Move m) const {
+int Position::see(Move m, int asymmThreshold) const {
 
   Square from, to;
   Bitboard occupied, attackers, stmAttackers;
@@ -1221,6 +1223,15 @@ int Position::see(Move m) const {
       }
 
   } while (stmAttackers);
+
+  // If we are doing asymmetric SEE evaluation and the same side does the first
+  // and the last capture, he loses a tempo and gain must be at least worth
+  // 'asymmThreshold', otherwise we replace the score with a very low value,
+  // before negamaxing.
+  if (asymmThreshold)
+      for (int i = 0; i < slIndex; i += 2)
+          if (swapList[i] < asymmThreshold)
+              swapList[i] = - QueenValueMg * 16;
 
   // Having built the swap list, we negamax through it to find the best
   // achievable score from the point of view of the side to move.

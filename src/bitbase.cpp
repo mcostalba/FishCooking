@@ -1,7 +1,7 @@
 /*
   Stockfish, a UCI chess playing engine derived from Glaurung 2.1
   Copyright (C) 2004-2008 Tord Romstad (Glaurung author)
-  Copyright (C) 2008-2012 Marco Costalba, Joona Kiiski, Tord Romstad
+  Copyright (C) 2008-2013 Marco Costalba, Joona Kiiski, Tord Romstad
 
   Stockfish is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -89,7 +89,8 @@ void Bitbases::init_kpk() {
   for (idx = 0; idx < IndexMax; idx++)
       db[idx].classify_leaf(idx);
 
-  // Iterate until all positions are classified (15 cycles needed)
+  // Iterate through the positions until no more of the unknown positions can be
+  // changed to either wins or draws (15 cycles needed).
   while (repeat)
       for (repeat = idx = 0; idx < IndexMax; idx++)
           if (db[idx] == UNKNOWN && db[idx].classify(db) != UNKNOWN)

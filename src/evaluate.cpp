@@ -151,7 +151,7 @@ namespace {
   #undef S
 
   const Score BishopPinBonus = make_score(66, 11);
-  const Score RookPinBonus = make_score(44, 11);
+  const Score RookPinBonus = make_score(33, 11);
 
   // Bonus for having the side to move (modified by Joona Kiiski)
   const Score Tempo = make_score(24, 11);

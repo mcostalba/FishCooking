@@ -440,6 +440,7 @@ namespace {
             if (    depth >= 12
                 && !stop
                 &&  PVSize == 1
+                &&  bestValue > VALUE_MATED_IN_MAX_PLY
                 && (   RootMoves.size() == 1
                     || Time::now() - SearchTime > (TimeMgr.available_time() * 20) / 100))
             {
@@ -678,7 +679,7 @@ namespace {
             if (nullValue >= VALUE_MATE_IN_MAX_PLY)
                 nullValue = beta;
 
-            if (depth < 6 * ONE_PLY)
+            if (depth < 12 * ONE_PLY)
                 return nullValue;
 
             // Do verification search at high depths
@@ -745,8 +746,9 @@ namespace {
         && ttMove == MOVE_NONE
         && (PvNode || !allNode))
     {
+        Depth d = depth - 2 * ONE_PLY - (PvNode ? DEPTH_ZERO : depth / 4);
         ss->skipNullMove = true;
-        search<PvNode ? PV : NonPV>(pos, ss, alpha, beta, depth <= 10 * ONE_PLY ? depth - 4 * ONE_PLY : depth / 2, allNode);
+        search<PvNode ? PV : NonPV>(pos, ss, alpha, beta, d, allNode);
         ss->skipNullMove = false;
 
         tte = TT.probe(posKey);
@@ -1222,10 +1224,11 @@ split_point_start: // At split points actual search starts from here
               continue;
           }
 
-          // Prune moves with negative or equal SEE
+          // Prune moves with negative or equal SEE and also moves with positive
+          // SEE where capturing piece loses a tempo and SEE < beta - futilityBase.
           if (   futilityBase < beta
               && depth < DEPTH_ZERO
-              && pos.see(move) <= 0)
+              && pos.see(move, beta - futilityBase) <= 0)
           {
               bestValue = std::max(bestValue, futilityBase);
               continue;

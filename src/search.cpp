@@ -98,7 +98,7 @@ namespace {
   void id_loop(Position& pos);
   Value value_to_tt(Value v, int ply);
   Value value_from_tt(Value v, int ply);
-  bool check_is_dangerous(const Position& pos, Move move, Value futilityBase, Value beta);
+  bool check_is_dangerous(const Position& pos, Move move, Value futilityBase, Value beta, Depth d);
   bool allows(const Position& pos, Move first, Move second);
   bool refutes(const Position& pos, Move first, Move second);
   string uci_pv(const Position& pos, int depth, Value alpha, Value beta);
@@ -1257,8 +1257,8 @@ split_point_start: // At split points actual search starts from here
           &&  givesCheck
           &&  move != ttMove
           && !pos.is_capture_or_promotion(move)
-          &&  ss->staticEval + PawnValueMg / 4 < beta
-          && !check_is_dangerous(pos, move, futilityBase, beta))
+          &&  (depth < -1 * ONE_PLY || ss->staticEval + PawnValueMg / 4 < beta)
+          && !check_is_dangerous(pos, move, futilityBase, beta, depth))
           continue;
 
       // Check for legality only before to do the move
@@ -1340,7 +1340,7 @@ split_point_start: // At split points actual search starts from here
 
   // check_is_dangerous() tests if a checking move can be pruned in qsearch()
 
-  bool check_is_dangerous(const Position& pos, Move move, Value futilityBase, Value beta)
+  bool check_is_dangerous(const Position& pos, Move move, Value futilityBase, Value beta, Depth d)
   {
     Piece pc = pos.piece_moved(move);
     Square from = from_sq(move);
@@ -1360,6 +1360,9 @@ split_point_start: // At split points actual search starts from here
     // Queen contact check is very dangerous
     if (type_of(pc) == QUEEN && (kingAtt & to))
         return true;
+
+    if (d < -1 * ONE_PLY)
+        return false;
 
     // Creating new double threats with checks is dangerous
     Bitboard b = (enemies ^ ksq) & newAtt & ~oldAtt;

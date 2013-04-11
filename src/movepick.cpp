@@ -111,19 +111,9 @@ MovePicker::MovePicker(const Position& p, Move ttm, Depth d, const History& h,
   if (p.checkers())
       phase = EVASION;
 
-  else if (d > DEPTH_QS_NO_CHECKS)
+  else if (d > DEPTH_QS_RECAPTURES)
       phase = QSEARCH_0;
 
-  else if (d > DEPTH_QS_RECAPTURES)
-  {
-      phase = QSEARCH_1;
-
-      // Skip TT move if is not a capture or a promotion, this avoids qsearch
-      // tree explosion due to a possible perpetual check or similar rare cases
-      // when TT table is full.
-      if (ttm && !pos.is_capture_or_promotion(ttm))
-          ttm = MOVE_NONE;
-  }
   else
   {
       phase = RECAPTURE;

@@ -587,13 +587,21 @@ Value do_evaluate(const Position& pos, Value& margin) {
             && !(pos.pieces(Them, PAWN) & attack_span_mask(Us, s)))
             score += evaluate_outposts<Piece, Us>(pos, ei, s);
 
+		if (Piece == ROOK || Piece == QUEEN)
+		{
+			Rank r  = rank_of(s);
+			Rank kR = rank_of(pos.king_square(Them));
+
+			File f  = file_of(s);
+			File kF = file_of(pos.king_square(Them));
+
+			if ( (r == RANK_7 && kR == RANK_8) || (r == RANK_2 && kR == RANK_1) || 
+				 (f == FILE_B && kF == FILE_A) || (f == FILE_G && kF == FILE_H) )
+				score += (Piece == ROOK ? RookOn7thBonus : QueenOn7thBonus);
+		}
+
         if ((Piece == ROOK || Piece == QUEEN) && relative_rank(Us, s) >= RANK_5)
         {
-            // Major piece on 7th rank
-            if (   relative_rank(Us, s) == RANK_7
-                && relative_rank(Us, pos.king_square(Them)) == RANK_8)
-                score += (Piece == ROOK ? RookOn7thBonus : QueenOn7thBonus);
-
             // Major piece attacking pawns on the same rank
             Bitboard pawns = pos.pieces(Them, PAWN) & rank_bb(s);
             if (pawns)

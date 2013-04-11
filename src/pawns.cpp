@@ -95,6 +95,22 @@ namespace {
     Score value = SCORE_ZERO;
     const Square* pl = pos.piece_list(Us, PAWN);
 
+	Bitboard allPawns = ourPawns | theirPawns;
+	int curSpace = 0;
+	int air = 0;
+
+	for (File f = FILE_A; f <= FILE_H; f++) {
+		if (allPawns & file_bb(f))
+			curSpace++;
+		else
+		{
+			air += curSpace * curSpace;
+			curSpace = 0;
+		}
+	}
+
+	e->pawnAir = air;
+
     // Loop through all pawns of the current color and score each pawn
     while ((s = *pl++) != SQ_NONE)
     {

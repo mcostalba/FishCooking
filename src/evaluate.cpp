@@ -167,6 +167,9 @@ namespace {
   const Score RookOpenFileBonus     = make_score(43, 21);
   const Score RookHalfOpenFileBonus = make_score(19, 10);
 
+  // Bonus for piece in a good pawn environment
+  const Score MinorPawnAirBonus = make_score(12, 33);
+
   // Penalty for rooks trapped inside a friendly king which has lost the
   // right to castle.
   const Value TrappedRookPenalty = Value(180);
@@ -600,6 +603,12 @@ Value do_evaluate(const Position& pos, Value& margin) {
                 score += (Piece == ROOK ? RookOnPawnBonus
                                         : QueenOnPawnBonus) * popcount<Max15>(pawns);
         }
+
+		if (Piece == BISHOP || Piece == KNIGHT)
+		{
+			if ((ei.pi->pawnAir >= 5) == (Piece == BISHOP))
+				score += MinorPawnAirBonus;
+		}
 
         // Special extra evaluation for bishops
         if (Piece == BISHOP && pos.is_chess960())

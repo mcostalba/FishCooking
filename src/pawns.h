@@ -63,6 +63,8 @@ struct Entry {
   Score value;
   int halfOpenFiles[COLOR_NB];
   Score kingSafety[COLOR_NB];
+
+  bool isLined;
 };
 
 typedef HashTable<Entry, 16384> Table;

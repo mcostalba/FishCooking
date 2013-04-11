@@ -95,6 +95,15 @@ namespace {
     Score value = SCORE_ZERO;
     const Square* pl = pos.piece_list(Us, PAWN);
 
+	bool isLined = pos.piece_count(Us, PAWN) == pos.piece_count(Them, PAWN);
+
+	if(isLined) {
+		for(File f = FILE_A; f <= FILE_H && isLined; f++)
+			isLined = popcount<Max15>(ourPawns & file_bb(f)) == popcount<Max15>(theirPawns & file_bb(f));
+	}
+
+	e->isLined = isLined;
+
     // Loop through all pawns of the current color and score each pawn
     while ((s = *pl++) != SQ_NONE)
     {

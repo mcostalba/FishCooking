@@ -220,7 +220,7 @@ Entry* probe(const Position& pos, Table& entries) {
 /// the king is on, as well as the two adjacent files.
 
 template<Color Us>
-Value Entry::shelter_storm(const Position& pos, Square ksq) {
+Value Entry::shelter_storm(const Position& pos, Square ksq, Value* kingPenalty) {
 
   const Color Them = (Us == WHITE ? BLACK : WHITE);
 
@@ -242,8 +242,12 @@ Value Entry::shelter_storm(const Position& pos, Square ksq) {
 
       // Storm danger is smaller if enemy pawn is blocked
       b  = theirPawns & FileBB[f];
-      rkThem = b ? rank_of(Us == WHITE ? lsb(b) : ~msb(b)) : RANK_1;
+      Square s = Us == WHITE ? lsb(b) : ~msb(b);
+      rkThem = b ? rank_of(s) : RANK_1;
       safety -= StormDanger[rkThem == rkUs + 1][rkThem];
+
+      if (f == kf && rkThem == rkUs + 1 && rkThem == RANK_3)
+          *kingPenalty = Value((theirPawns & pos.attacks_from<PAWN>(s, Us)) ? 210 : 150);
   }
 
   return safety;
@@ -267,16 +271,17 @@ Score Entry::update_safety(const Position& pos, Square ksq) {
   if (relative_rank(Us, ksq) > RANK_4)
       return kingSafety[Us] = make_score(0, -16 * minKPdistance[Us]);
 
-  Value bonus = shelter_storm<Us>(pos, ksq);
+  Value kingPenalty = Value(0);
+  Value bonus = shelter_storm<Us>(pos, ksq, &kingPenalty);
 
   // If we can castle use the bonus after the castle if is bigger
   if (pos.can_castle(make_castle_right(Us, KING_SIDE)))
-      bonus = std::max(bonus, shelter_storm<Us>(pos, relative_square(Us, SQ_G1)));
+      bonus = std::max(bonus, shelter_storm<Us>(pos, relative_square(Us, SQ_G1), &kingPenalty));
 
   if (pos.can_castle(make_castle_right(Us, QUEEN_SIDE)))
-      bonus = std::max(bonus, shelter_storm<Us>(pos, relative_square(Us, SQ_C1)));
+      bonus = std::max(bonus, shelter_storm<Us>(pos, relative_square(Us, SQ_C1), &kingPenalty));
 
-  return kingSafety[Us] = make_score(bonus, -16 * minKPdistance[Us]);
+  return kingSafety[Us] = make_score(bonus, -16 * minKPdistance[Us] - kingPenalty);
 }
 
 // Explicit template instantiation

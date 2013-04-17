@@ -876,7 +876,7 @@ Value do_evaluate(const Position& pos, Value& margin) {
 
         // Base bonus based on rank
         Value mbonus = Value(20 * rr);
-        Value ebonus = Value(10 * (rr + r + 1));
+        Value ebonus = Value(15 * r + 15);
 
         if (rr)
         {
@@ -938,7 +938,7 @@ Value do_evaluate(const Position& pos, Value& margin) {
             if (pos.non_pawn_material(Them) <= KnightValueMg)
                 ebonus += ebonus / 4;
             else if (pos.pieces(Them, ROOK, QUEEN))
-                ebonus -= ebonus / 4;
+                ebonus -= ebonus / 4; // Note to world, try reducing punishment.
         }
         score += make_score(mbonus, ebonus);
 
